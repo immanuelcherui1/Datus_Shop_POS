@@ -14,6 +14,8 @@ Local verification performed during implementation:
 - PostgreSQL 17.6 on Windows: all 16 tests passed, including simultaneous last-unit checkout and simultaneous identical-key checkout.
 - React Testing Library / Vitest: 5 tests passed (failed login, retry-key persistence, reload recovery, definite rejection recovery, and barcode/search race).
 - Vite production build passed.
+- Windows installer acceptance passed on GitHub Actions: bundled resource/Tcl checks, silent installation, first-run owner and schema setup, wholesale checkout, stock/cash reconciliation, encrypted backup, restart preserving credentials and receipts, restricted database permissions, and uninstall preserving business data. Verified run: https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/40411121934 (commit f4d1023).
+- Local frozen backend smoke passed. The local sandbox prevented Tcl initialization and restricted-token PostgreSQL startup; the delivered installer was built and tested on the separate Windows runner.
 - Browser smoke test: owner login, opening-stock adjustment, register opening, wholesale checkout and receipt rendering. One pack consumed 12 base units and the receipt retained its wholesale price.
 - Real PostgreSQL backup/restore drill passed: encrypted dump restored into a new empty database, historical receipt matched, inventory reconciled and expected cash matched. A second restore into the populated database was correctly refused.
 
