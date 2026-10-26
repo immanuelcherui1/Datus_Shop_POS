@@ -14,3 +14,7 @@ backups/
 coverage/
 .coverage
 instance/
+build/
+dist/
+release/
+.packaging-cache/

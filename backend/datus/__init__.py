@@ -10,12 +10,13 @@ from sqlalchemy import event
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import generate_password_hash
 from .extensions import db, migrate, jwt, limiter
+from .paths import resource_root, data_root
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = resource_root()
 
 
 def create_app(config=None):
-    load_dotenv(ROOT / '.env')
+    load_dotenv(data_root() / '.env')
     app = Flask(__name__, static_folder=None)
     app.config.update(
         SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL', 'sqlite:///datus.db'),

@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from dotenv import load_dotenv
 from sqlalchemy.engine import make_url
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ['DATUS_DATA_DIR']) if os.getenv('DATUS_DATA_DIR') else Path(__file__).resolve().parents[1]
 MAGIC = b'DATUSBK1'
 CHUNK = 1024 * 1024
 
@@ -89,7 +89,7 @@ def upload_pending(directory):
         print(f'Uploaded encrypted backup: {file.name}')
 
 
-def main():
+def main(argv=None):
     load_dotenv(ROOT / '.env')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['keygen', 'backup', 'upload', 'restore'])
@@ -98,7 +98,7 @@ def main():
     parser.add_argument('--upload', action='store_true')
     parser.add_argument('--file', type=Path)
     parser.add_argument('--target-url-env', default='RESTORE_DATABASE_URL', help='Name of environment variable containing EMPTY target database URL')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.action == 'upload':
         upload_pending(args.directory)
         return

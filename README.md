@@ -51,7 +51,15 @@ DATUS/
 
 See [architecture and schema](docs/ARCHITECTURE.md), [inventory](docs/INVENTORY.md), [checkout and payments](docs/PAYMENTS.md), [API reference](docs/API.md), [Windows operations](docs/WINDOWS.md), and [backup / restore](docs/BACKUP.md).
 
-## Windows 11 installation
+## Windows installer (recommended for the shop computer)
+
+A self-contained Windows x64 installer is now available through the **Windows installer** GitHub Actions workflow. It includes Python, the built interface and a private PostgreSQL instance. Open the DATUS shortcut and use the graphical first-run wizard to create your shop and owner account; no developer tools or separate database installation are needed.
+
+See [installer instructions](docs/INSTALLER.md) for downloads, checksums, data locations, upgrades and uninstall behavior. Current builds are unsigned. Your business database and backups are stored outside the application directory and retained when uninstalling.
+
+The commands below are the alternative developer/manual installation, not required when using the installer.
+
+## Manual Windows 11 installation
 
 Use a local, non-synchronized folder, for example `C:\DATUS`. Do not place the PostgreSQL data directory in OneDrive or a network share.
 
