@@ -22,7 +22,7 @@ for package in ['flask', 'flask_migrate', 'flask_limiter', 'marshmallow', 'tzdat
     datas += collect_data_files(package)
 for distribution in ['Flask', 'Flask-Limiter', 'limits', 'marshmallow']:
     datas += copy_metadata(distribution)
-hidden = collect_submodules('psycopg') + ['sqlalchemy.dialects.postgresql.psycopg', 'scripts.backup', 'desktop.smoke']
+hidden = collect_submodules('psycopg') + ['sqlalchemy.dialects.postgresql.psycopg', 'scripts.backup', 'desktop.smoke', 'logging.config']
 a = Analysis([str(root / 'desktop/launcher.py')], pathex=[str(root), str(root / 'backend')], hookspath=[str(root / 'packaging/hooks')],
              binaries=[], datas=datas, hiddenimports=hidden, excludes=['pytest'], noarchive=False)
 pyz = PYZ(a.pure)
