@@ -1,0 +1,53 @@
+# Implementation status and verification
+
+## Delivered scope
+
+Authentication/authorization, product catalogue, stock ledger and reconciliation, suppliers, purchase orders and partial receiving, retail/wholesale checkout, split recorded settlement, receipts, controlled returns, register reconciliation, daily reports, user creation, audit view, migrations, Windows scripts and encrypted backup tooling are implemented.
+
+The frontend talks to the actual Flask API. Empty screens do not insert fabricated business metrics. Demonstration catalogue data is optional and starts with zero stock.
+
+## Verification record
+
+Local verification performed during implementation:
+
+- SQLite: 14 tests passed; 2 PostgreSQL-only concurrency cases intentionally skipped.
+- PostgreSQL 17.6 on Windows: all 16 tests passed, including simultaneous last-unit checkout and simultaneous identical-key checkout.
+- React Testing Library / Vitest: 2 tests passed (failed login and retry-key persistence across network failure).
+- Vite production build passed.
+- Browser smoke test: owner login, opening-stock adjustment, register opening, wholesale checkout and receipt rendering. One pack consumed 12 base units and the receipt retained its wholesale price.
+- Real PostgreSQL backup/restore drill passed: encrypted dump restored into a new empty database, historical receipt matched, inventory reconciled and expected cash matched. A second restore into the populated database was correctly refused.
+
+See GitHub Actions for verification on subsequent commits. The repository's PostgreSQL tests deliberately skip if a test database is not configured; SQLite alone does not establish concurrency safety.
+
+Acceptance tests include product uniqueness, purchasing vs receipt distinction, sale stock consumption, full rollback after a late injected failure, idempotency, insufficient stock, wholesale conversion, over-return prevention, refund traceability, immutable SQL/ORM ledger, permission and branch denial, split settlement, cash reconciliation, balance reconciliation, historical prices, external reference duplication, daily profit/tax, and CSRF/session revocation.
+
+Cloud credentials, a real receipt printer, real scanner and production payment provider were not available for verification. Their acceptance must be completed on the installed shop computer. No live cloud upload was performed.
+
+## Known limitations
+
+- Single business and one operating branch; no organization/branch administration, warehouse transfers or multi-tenant isolation product.
+- No independently offline Android/device synchronization. The Windows database is authoritative; browser caching is not used as a second ledger.
+- No Android APK yet. API boundaries permit a future mobile client after secure LAN access is designed.
+- No live Daraja/card/bank initiation, webhook verification or provider reconciliation. External settlement is a privileged manual record only.
+- No credit balances, customer accounts, loyalty, expenses module, supplier payable ledger or full accounting journal.
+- Tax-exclusive pricing only; tax rate configured per product. No fiscal/e-invoicing integration or legal certification.
+- No batches, expiry, serials, reservations or formal physical-count workflow.
+- Product names, categories and suppliers are business-wide. Customer is an optional name snapshot, not a full customer profile.
+- Return entry requires operator-entered refund allocations; the server validates exact eligibility and rounded totals. No exchange wizard.
+- Suspended carts use browser sessionStorage and are not durable after browser session loss. In-flight checkout retry keys are in memory; inspect sales before repeating after a browser crash/reload.
+- Product selection in adjustment/purchase forms currently loads the first 100 catalogue entries; POS and product screens provide search/pagination. Expand selectors before using a larger catalogue.
+- Browser receipt print/PDF only; no direct ESC/POS, drawer pulse or fiscal printer driver.
+- Startup script is an optional sign-in scheduled task, not an installed Windows service. Backup task and cloud bucket are configured by the operator.
+- Cloud retention/local cleanup and remote availability monitoring are operational configuration, not automatic deletion jobs.
+- Backup key and application/database credentials require secure local storage and separate recovery copies.
+- Login throttling is process-local. No central alerting, distributed job worker or MFA.
+- Audit history is protected against ordinary application modification, not a hostile machine/database administrator.
+- PostgreSQL is required for deployment. SQLite is only a development/test convenience.
+
+## Next milestones
+
+1. Complete shop hardware, tax, backup restore and staff acceptance on the target Windows computer.
+2. Improve large-catalogue selectors and durable recovery of uncertain browser checkout.
+3. Add verified provider integration and reconciliation against real sandbox accounts.
+4. Add batch/expiry or credit/accounting only when business requirements justify them.
+5. Add secure Android LAN client, then design separate-device offline operation if required.
