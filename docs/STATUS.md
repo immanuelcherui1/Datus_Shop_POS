@@ -12,7 +12,7 @@ Local verification performed during implementation:
 
 - SQLite: 14 tests passed; 2 PostgreSQL-only concurrency cases intentionally skipped.
 - PostgreSQL 17.6 on Windows: all 16 tests passed, including simultaneous last-unit checkout and simultaneous identical-key checkout.
-- React Testing Library / Vitest: 2 tests passed (failed login and retry-key persistence across network failure).
+- React Testing Library / Vitest: 5 tests passed (failed login, retry-key persistence, reload recovery, definite rejection recovery, and barcode/search race).
 - Vite production build passed.
 - Browser smoke test: owner login, opening-stock adjustment, register opening, wholesale checkout and receipt rendering. One pack consumed 12 base units and the receipt retained its wholesale price.
 - Real PostgreSQL backup/restore drill passed: encrypted dump restored into a new empty database, historical receipt matched, inventory reconciled and expected cash matched. A second restore into the populated database was correctly refused.
@@ -34,7 +34,7 @@ Cloud credentials, a real receipt printer, real scanner and production payment p
 - No batches, expiry, serials, reservations or formal physical-count workflow.
 - Product names, categories and suppliers are business-wide. Customer is an optional name snapshot, not a full customer profile.
 - Return entry requires operator-entered refund allocations; the server validates exact eligibility and rounded totals. No exchange wizard.
-- Suspended carts use browser sessionStorage and are not durable after browser session loss. In-flight checkout retry keys are in memory; inspect sales before repeating after a browser crash/reload.
+- Suspended carts use browser sessionStorage and are not durable after browser session loss. Pending checkout requests and keys survive navigation/refresh in sessionStorage and must be recovered before a different checkout. Closing the browser session or clearing storage can still lose that record; inspect sales before repeating.
 - Product selection in adjustment/purchase forms currently loads the first 100 catalogue entries; POS and product screens provide search/pagination. Expand selectors before using a larger catalogue.
 - Browser receipt print/PDF only; no direct ESC/POS, drawer pulse or fiscal printer driver.
 - Startup script is an optional sign-in scheduled task, not an installed Windows service. Backup task and cloud bucket are configured by the operator.
@@ -47,7 +47,7 @@ Cloud credentials, a real receipt printer, real scanner and production payment p
 ## Next milestones
 
 1. Complete shop hardware, tax, backup restore and staff acceptance on the target Windows computer.
-2. Improve large-catalogue selectors and durable recovery of uncertain browser checkout.
+2. Improve large-catalogue selectors and extend recovery beyond browser-session storage.
 3. Add verified provider integration and reconciliation against real sandbox accounts.
 4. Add batch/expiry or credit/accounting only when business requirements justify them.
 5. Add secure Android LAN client, then design separate-device offline operation if required.

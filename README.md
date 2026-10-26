@@ -179,7 +179,7 @@ GitHub Actions runs both database suites against PostgreSQL 17, plus frontend te
 - A completed sale contains immutable descriptions, prices, discounts, tax, conversion and cost snapshots.
 - Retrying the same operation key cannot post the same transaction twice. A changed payload cannot reuse a key.
 - External provider actions are not part of a database transaction. This release does not pretend that recording a reference performs a payment.
-- The browser must keep an uncertain checkout open and retry the same operation. Refreshing/closing the page loses its in-memory retry key: inspect Sales history before creating another sale.
+- An uncertain checkout is saved in browser sessionStorage with its original request and retry key. After navigation or refresh, New sale shows a recovery screen and blocks a different checkout until resolved. Closing the browser session or clearing browser storage can lose this recovery record: inspect Sales history before creating another sale.
 
 ## Before live use
 

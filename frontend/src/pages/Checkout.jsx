@@ -33,7 +33,10 @@ export function Checkout({ user, notify, onReceipt }) {
   const [drafts, setDrafts] = useState(() =>
     JSON.parse(sessionStorage.getItem(`datus-drafts-${user.id}`) || "[]"),
   );
-  const submit = useRef(operation());
+  const submit = useRef(null);
+  if (!submit.current)
+    submit.current = operation(`datus-pending-checkout-${user.id}`);
+  const [pending, setPending] = useState(() => submit.current.pending());
   const search = useRef();
   useEffect(() => {
     let active = true;
@@ -83,7 +86,11 @@ export function Checkout({ user, notify, onReceipt }) {
     };
   }, [JSON.stringify(lines), customer]);
   function add(product) {
-    if (busy) return;
+    if (busy || pending) return;
+    if (!product.active || Number(product.quantity) <= 0) {
+      setError("This product is inactive or out of stock.");
+      return;
+    }
     setCart((items) => {
       const found = items.find((x) => x.product_id === product.id);
       return found
@@ -132,7 +139,47 @@ export function Checkout({ user, notify, onReceipt }) {
     } catch (e) {
       setError(e.message);
     } finally {
+      setPending(submit.current.pending());
       setBusy(false);
+    }
+  }
+  async function recover() {
+    setBusy(true);
+    setError("");
+    try {
+      const sale = await submit.current.retry();
+      setCart([]);
+      setPayments([{ method: "cash", amount: "", reference: "" }]);
+      onReceipt(sale);
+      notify(`Recovered sale ${sale.number}. Do not collect payment again.`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setPending(submit.current.pending());
+      setBusy(false);
+    }
+  }
+  async function scan(code) {
+    if (busy || pending || !code.trim()) return;
+    try {
+      // A scanner sends Enter faster than catalogue results arrive. Query this exact code,
+      // never choose a product from a stale search response.
+      const result = await api(
+        `/products?q=${encodeURIComponent(code.trim())}&size=100`,
+      );
+      const match =
+        result.items.find(
+          (p) => p.barcode === code.trim() || p.sku === code.trim(),
+        ) ||
+        (result.items.length === 1 && result.items[0]);
+      if (!match)
+        return setError(
+          "No unique product matches this scan. Select a search result.",
+        );
+      add(match);
+      setQuery("");
+    } catch (e) {
+      setError(e.message);
     }
   }
   function suspend() {
@@ -151,6 +198,22 @@ export function Checkout({ user, notify, onReceipt }) {
     setDrafts(next);
     sessionStorage.setItem(`datus-drafts-${user.id}`, JSON.stringify(next));
   }
+  if (pending)
+    return (
+      <section className="narrow panel" role="alert">
+        <h2>Recover pending checkout</h2>
+        <p>
+          The last checkout has not been acknowledged on this screen. Recover
+          its result using the original request before starting another sale. Do
+          not collect payment again.
+        </p>
+        <p>Customer: {pending[2].customer || "Walk-in customer"}</p>
+        {error && <p className="error">{error}</p>}
+        <button className="primary" disabled={busy} onClick={recover}>
+          {busy ? "Recovering…" : "Recover checkout"}
+        </button>
+      </section>
+    );
   return (
     <div className="checkout-grid">
       <section>
@@ -165,15 +228,8 @@ export function Checkout({ user, notify, onReceipt }) {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  const match =
-                    products.find(
-                      (x) => x.barcode === query || x.sku === query,
-                    ) ||
-                    (products.length === 1 && products[0]);
-                  if (match) {
-                    add(match);
-                    setQuery("");
-                  }
+                  e.preventDefault();
+                  scan(query);
                 }
               }}
             />

@@ -28,4 +28,5 @@ def test_parallel_checkout_does_not_oversell(app, client, same_key):
     assert client.get('/api/products').json['items'][0]['quantity'] == '0.000'
     assert client.get('/api/inventory/reconciliation').json['ok']
     if same_key:
+        assert all(r.status_code == 200 for r in results)
         assert post(client, '/sales', sale_body(), 'same-checkout-key').status_code == 200

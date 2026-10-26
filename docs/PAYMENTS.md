@@ -10,9 +10,11 @@ Payments must sum exactly to the server total. There is no credit or partial-pay
 
 ## Safe checkout retry
 
-The client sends a cryptographically random `Idempotency-Key`. The server scopes it to user, operation and path and hashes the JSON payload. It saves the successful response in the same transaction as sale, payment, movements and audit. A retry returns the original result; a changed payload returns 409. Two simultaneous claims cannot both succeed.
+The client sends a cryptographically random `Idempotency-Key`. The server scopes it to user, operation and path and hashes the JSON payload. It saves the successful response in the same transaction as sale, payment, movements and audit. A retry returns the original result; a changed payload returns 409. Two simultaneous claims cannot create two sales; both callers can retrieve the same committed result.
 
-The UI retains the key while an identical operation is retried. Do not refresh after an uncertain result: retry on the same screen, or inspect Sales history before posting again. Durable crash/reload recovery is not implemented. Suspended carts live in sessionStorage, contain no payment confirmation, and are requoted when resumed.
+Before sending checkout, the UI saves its request and key in sessionStorage under the signed-in user. After a lost response, page refresh or navigation, New sale offers Recover checkout and blocks a different sale until the result is resolved. Recovery replays the original request and key, rather than recalculating a new payment. Definite validation/permission/stock rejections clear the pending request so the operator can correct it. Authentication expiry and network/server failures retain it. Recovery never collects payment again.
+
+This protects same-browser-session reloads; closing the browser session or clearing storage can remove recovery data. Inspect Sales history before repeating after that kind of loss. Pending data includes customer/settlement references, so use an access-controlled Windows account. Login and account-creation passwords are never persisted by this helper. Suspended carts also live in sessionStorage, contain no payment confirmation, and are requoted when resumed.
 
 ## Provider integration contract
 

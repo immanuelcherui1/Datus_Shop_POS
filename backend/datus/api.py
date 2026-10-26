@@ -71,7 +71,13 @@ def mutation(scope):
                 db.session.flush()
             except IntegrityError:
                 db.session.rollback()
-                raise Conflict('Another request used this key. Retry the same request to retrieve its result.')
+                # PostgreSQL waits for the winning transaction before raising the uniqueness error.
+                # Return its committed response directly, rather than an ambiguous conflict.
+                winner = db.session.scalar(select(Idempotency).where(Idempotency.user_id == g.user.id,
+                    Idempotency.scope == operation, Idempotency.key == key))
+                if winner and winner.digest == digest and winner.response is not None:
+                    return jsonify(winner.response)
+                raise Conflict('This operation key conflicts with another request.')
             response = serial(fn(*args, **kwargs))
             retry.response = response
             db.session.commit()
