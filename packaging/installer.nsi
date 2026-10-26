@@ -60,7 +60,7 @@ Section "DATUS application (required)" SEC_APP
   CreateShortcut "$SMPROGRAMS\DATUS\Uninstall DATUS.lnk" "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "DisplayName" "DATUS Retail & Wholesale"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "UninstallString" '$"$INSTDIR\Uninstall.exe$"'
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "InstallLocation" "$INSTDIR"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "NoRepair" 1

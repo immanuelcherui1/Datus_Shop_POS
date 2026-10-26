@@ -49,7 +49,10 @@ jobs:
           $process = Start-Process -FilePath $setup.FullName -ArgumentList @('/S', ('/D=' + $installPath)) -WindowStyle Hidden -PassThru -Wait
           if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
           $process = Start-Process -FilePath (Join-Path $installPath 'DATUS.exe') -ArgumentList @('--smoke-test', ('"' + $testPath + '"')) -WindowStyle Hidden -PassThru -Wait
-          if ($process.ExitCode -ne 0) { throw 'Frozen application smoke test failed.' }
+          if ($process.ExitCode -ne 0) {
+            Get-Content (Join-Path $testPath 'smoke-failure.json') -ErrorAction SilentlyContinue
+            throw 'Frozen application smoke test failed.'
+          }
           $result = Get-Content (Join-Path $testPath 'smoke-result.json') -Raw | ConvertFrom-Json
           if (-not $result.ok) { throw 'Smoke test result missing or unsuccessful.' }
           Copy-Item (Join-Path $testPath 'smoke-result.json') release\smoke-result.json

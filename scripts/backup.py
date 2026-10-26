@@ -6,6 +6,7 @@ import secrets
 import struct
 import subprocess
 import tempfile
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -68,7 +69,15 @@ def pg_environment(url):
 
 
 def run_pg(command, env):
-    result = subprocess.run(command, env=env, capture_output=True)
+    frozen_windows = os.name == 'nt' and getattr(sys, 'frozen', False)
+    if frozen_windows:
+        import ctypes
+        ctypes.windll.kernel32.SetDllDirectoryW(None)
+    try:
+        flags = {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}
+        result = subprocess.run(command, env=env, capture_output=True, **flags)
+    finally:
+        if frozen_windows: ctypes.windll.kernel32.SetDllDirectoryW(sys._MEIPASS)
     if result.returncode:
         # Do not echo connection details or SQL data to scheduled-task logs.
         raise RuntimeError(f'{Path(command[0]).name} failed with exit code {result.returncode}; check database access and binary version.')

@@ -148,6 +148,9 @@ if __name__ == '__main__':
     except Exception as error:
         if '--smoke-test' in sys.argv or '--self-test' in sys.argv:
             # Automated jobs must fail, not hang waiting for a windowed crash dialog.
+            if '--self-test' in sys.argv:
+                import traceback
+                Path(sys.executable).with_name('self-test-failure.log').write_text(traceback.format_exc(), encoding='utf-8')
             if '--smoke-test' in sys.argv:
                 destination = Path(sys.argv[sys.argv.index('--smoke-test') + 1])
                 if destination.is_dir():
