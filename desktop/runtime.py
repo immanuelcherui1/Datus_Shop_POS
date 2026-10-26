@@ -126,12 +126,13 @@ class Installation:
                 return
         except psycopg.OperationalError:
             pass
-        self.process = self.external([str(self.pg / 'postgres.exe'), '-D', str(self.cluster),
-            '-h', '127.0.0.1', '-p', str(self.settings['database_port'])], background=True)
+        # pg_ctl starts PostgreSQL with a restricted token on Windows, including
+        # when an administrator launches DATUS. Direct postgres.exe would refuse it.
+        self.external([str(self.pg / 'pg_ctl.exe'), '-D', str(self.cluster), '-w', '-t', '45',
+            '-l', str(self.data / 'logs' / 'postgresql-server.log'),
+            '-o', f"-h 127.0.0.1 -p {self.settings['database_port']}", 'start'])
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
-            if self.process.poll() is not None:
-                raise RuntimeError('The private database could not start. Check the database log; no data was removed.')
             try:
                 with self.connect(): return
             except psycopg.OperationalError: time.sleep(.25)

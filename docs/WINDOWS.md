@@ -1,5 +1,7 @@
 # Windows operations
 
+For the self-contained desktop installer, follow [INSTALLER.md](INSTALLER.md). The steps below are for a manual source deployment with separately installed developer tools and PostgreSQL.
+
 ## Runtime
 
 PostgreSQL runs as its installed Windows service. DATUS uses Waitress, which supports Windows, bound to `127.0.0.1:8080`. The browser opens that address. Node and Vite are build tools, not production servers. Windows must remain powered and awake while trading.

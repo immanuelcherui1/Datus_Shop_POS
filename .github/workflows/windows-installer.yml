@@ -51,6 +51,8 @@ jobs:
           $process = Start-Process -FilePath (Join-Path $installPath 'DATUS.exe') -ArgumentList @('--smoke-test', ('"' + $testPath + '"')) -WindowStyle Hidden -PassThru -Wait
           if ($process.ExitCode -ne 0) {
             Get-Content (Join-Path $testPath 'smoke-failure.json') -ErrorAction SilentlyContinue
+            Get-Content (Join-Path $testPath 'logs\postgresql.log') -Tail 30 -ErrorAction SilentlyContinue
+            Get-Content (Join-Path $testPath 'logs\postgresql-server.log') -Tail 30 -ErrorAction SilentlyContinue
             throw 'Frozen application smoke test failed.'
           }
           $result = Get-Content (Join-Path $testPath 'smoke-result.json') -Raw | ConvertFrom-Json

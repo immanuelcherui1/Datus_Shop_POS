@@ -2,7 +2,7 @@
 
 ## Delivered scope
 
-Authentication/authorization, product catalogue, stock ledger and reconciliation, suppliers, purchase orders and partial receiving, retail/wholesale checkout, split recorded settlement, receipts, controlled returns, register reconciliation, daily reports, user creation, audit view, migrations, Windows scripts and encrypted backup tooling are implemented.
+Authentication/authorization, product catalogue, stock ledger and reconciliation, suppliers, purchase orders and partial receiving, retail/wholesale checkout, split recorded settlement, receipts, controlled returns, register reconciliation, daily reports, user creation, audit view, migrations, Windows scripts and encrypted backup tooling are implemented. The desktop packaging workflow bundles Python, PostgreSQL and the frontend, with a graphical owner setup and per-user installer.
 
 The frontend talks to the actual Flask API. Empty screens do not insert fabricated business metrics. Demonstration catalogue data is optional and starts with zero stock.
 
@@ -37,7 +37,8 @@ Cloud credentials, a real receipt printer, real scanner and production payment p
 - Suspended carts use browser sessionStorage and are not durable after browser session loss. Pending checkout requests and keys survive navigation/refresh in sessionStorage and must be recovered before a different checkout. Closing the browser session or clearing storage can still lose that record; inspect sales before repeating.
 - Product selection in adjustment/purchase forms currently loads the first 100 catalogue entries; POS and product screens provide search/pagination. Expand selectors before using a larger catalogue.
 - Browser receipt print/PDF only; no direct ESC/POS, drawer pulse or fiscal printer driver.
-- Startup script is an optional sign-in scheduled task, not an installed Windows service. Backup task and cloud bucket are configured by the operator.
+- The installer offers an optional sign-in shortcut and a desktop controller. Manual source deployments can use the scheduled startup script. Neither is an installed Windows service. Backup scheduling and the cloud bucket require operator configuration.
+- Installer builds are unsigned until a publisher certificate is configured.
 - Cloud retention/local cleanup and remote availability monitoring are operational configuration, not automatic deletion jobs.
 - Backup key and application/database credentials require secure local storage and separate recovery copies.
 - Login throttling is process-local. No central alerting, distributed job worker or MFA.
