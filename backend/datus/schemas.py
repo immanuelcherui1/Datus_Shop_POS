@@ -1,6 +1,6 @@
 """Reject unknown fields and reject imprecise/oversized financial inputs."""
 from decimal import Decimal, InvalidOperation
-from marshmallow import Schema, fields, validate, ValidationError
+from marshmallow import Schema, fields, validate, ValidationError, validates_schema
 
 
 class Exact(fields.Field):
@@ -45,15 +45,15 @@ class ProductSchema(Schema):
     unit = text(30, load_default='piece')
     retail_price = Exact(required=True)
     wholesale_price = Exact(required=True)
-    pack_size = Exact(3, '1', required=True)
+    pack_size = Exact(0, '1', required=True)
     tax_rate = Exact(4, maximum='1', load_default=Decimal('0'))
-    reorder_level = Exact(3, load_default=Decimal('5'))
+    reorder_level = Exact(0, load_default=Decimal('5'))
     active = fields.Boolean(load_default=True)
 
 
 class PurchaseLineSchema(Schema):
     product_id = fields.Integer(required=True, strict=True)
-    quantity = Exact(3, '0.001', required=True)
+    quantity = Exact(0, '1', required=True)
     unit_cost = Exact(6, required=True)
 
 
@@ -64,7 +64,7 @@ class PurchaseSchema(Schema):
 
 class ReceiveLineSchema(Schema):
     line_id = fields.Integer(required=True, strict=True)
-    quantity = Exact(3, '0.001', required=True)
+    quantity = Exact(0, '1', required=True)
 
 
 class ReceiveSchema(Schema):
@@ -76,6 +76,12 @@ class CartLineSchema(Schema):
     quantity = Exact(3, '0.001', required=True)
     mode = fields.String(required=True, validate=validate.OneOf(['retail', 'wholesale']))
     discount = Exact(load_default=Decimal('0'))
+
+
+    @validates_schema
+    def whole_wholesale_packs(self, data, **kwargs):
+        if data['mode'] == 'wholesale' and data['quantity'] != data['quantity'].to_integral_value():
+            raise ValidationError({'quantity': ['Wholesale packs must be whole numbers.']})
 
 
 class PaymentSchema(Schema):
@@ -95,7 +101,7 @@ class CheckoutSchema(QuoteSchema):
 
 class AdjustmentSchema(Schema):
     product_id = fields.Integer(required=True, strict=True)
-    quantity = Exact(3, '-1000000000', required=True)
+    quantity = Exact(0, '-1000000000', required=True)
     unit_cost = Exact(6, load_default=Decimal('0'))
     reason = fields.String(required=True, validate=validate.Length(min=5, max=500))
 

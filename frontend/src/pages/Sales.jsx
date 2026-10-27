@@ -14,7 +14,7 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { api, operation } from "../api";
-import { cash, localDate, dateTime } from "../lib/format";
+import { quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
 export function Sales({ onReceipt, user, notify }) {
@@ -90,12 +90,15 @@ export function Sales({ onReceipt, user, notify }) {
           {returned.lines.map((l) => (
             <div className="receipt-input" key={l.id}>
               <span>
-                {l.name} · sold {l.quantity}
+                {l.name} · sold {quantity(l.quantity)}
               </span>
               <input
                 aria-label={`Return quantity ${l.name}`}
                 name={`q${l.id}`}
                 placeholder="Return quantity"
+                type="number"
+                min="0"
+                step={l.mode === "wholesale" && Number.isInteger(Number(l.quantity)) ? "1" : "0.001"}
               />
               <select aria-label="Disposition" name={`d${l.id}`}>
                 <option value="restock">Restock</option>

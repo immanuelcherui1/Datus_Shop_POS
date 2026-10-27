@@ -14,7 +14,7 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { api, operation } from "../api";
-import { cash, localDate, dateTime } from "../lib/format";
+import { quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 const emptyProduct = {
   sku: "",
@@ -106,6 +106,9 @@ export function Products({ notify }) {
                 key={k}
                 label={k.replaceAll("_", " ")}
                 value={form[k] ?? ""}
+                type={["pack_size", "reorder_level", "retail_price", "wholesale_price", "tax_rate"].includes(k) ? "number" : "text"}
+                min={k === "pack_size" ? "1" : "0"}
+                step={k === "tax_rate" ? "0.0001" : k.endsWith("price") ? "0.01" : "1"}
                 required={k !== "barcode"}
                 onChange={(e) => setForm({ ...form, [k]: e.target.value })}
               />
@@ -157,10 +160,10 @@ export function Products({ notify }) {
                 <td>
                   {cash(p.wholesale_price)}{" "}
                   <small>
-                    × {p.pack_size} {p.unit}
+                    × {quantity(p.pack_size)} {p.unit}
                   </small>
                 </td>
-                <td>{p.quantity}</td>
+                <td>{quantity(p.quantity)}</td>
                 <td>
                   <Badge warn={Number(p.quantity) <= Number(p.reorder_level)}>
                     {!p.active

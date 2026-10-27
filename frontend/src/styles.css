@@ -1028,6 +1028,17 @@ pre {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+/* Desktop navigation scrolls independently when height or zoom hides lower links. */
+@media (min-width: 781px) {
+  .sidebar {
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #87a294 #183b34;
+  }
+  .sidebar > * { flex-shrink: 0; }
+}
 @media (max-width: 1150px) {
   .sidebar {
     width: 205px;

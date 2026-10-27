@@ -179,6 +179,11 @@ def post_return(sale_id, data):
         previous = db.session.execute(select(func.coalesce(func.sum(ReturnLine.quantity), 0),
             func.coalesce(func.sum(ReturnLine.amount), 0), func.coalesce(func.sum(ReturnLine.tax), 0),
             func.coalesce(func.sum(ReturnLine.cost), 0)).where(ReturnLine.sale_line_id == line.id)).one()
+        # Preserve eligibility for legacy fractional wholesale sales/returns.
+        if (line.mode == 'wholesale' and line.quantity == line.quantity.to_integral_value()
+                and previous[0] == previous[0].to_integral_value()
+                and item['quantity'] != item['quantity'].to_integral_value()):
+            raise BadRequest('Wholesale returns must use whole packs.')
         cumulative = previous[0] + item['quantity']
         if cumulative > line.quantity:
             raise Conflict('Return exceeds the remaining eligible quantity.')

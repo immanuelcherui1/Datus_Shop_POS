@@ -14,7 +14,7 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { api, operation } from "../api";
-import { cash, localDate, dateTime } from "../lib/format";
+import { quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
 export function Receipt({ sale, close }) {
@@ -75,7 +75,7 @@ export function Receipt({ sale, close }) {
               <strong>{line.name}</strong>
               <div>
                 <span>
-                  {line.quantity} × {cash(line.unit_price)} · {line.mode}
+                  {quantity(line.quantity)} × {cash(line.unit_price)} · {line.mode}
                 </span>
                 <b>{cash(line.subtotal)}</b>
               </div>

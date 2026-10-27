@@ -14,7 +14,7 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { api, operation } from "../api";
-import { cash, localDate, dateTime } from "../lib/format";
+import { quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
 export function Checkout({ user, notify, onReceipt }) {
@@ -275,7 +275,7 @@ export function Checkout({ user, notify, onReceipt }) {
                       Number(p.quantity) <= Number(p.reorder_level) ? "low" : ""
                     }
                   >
-                    {p.quantity} in stock
+                    {quantity(p.quantity)} in stock
                   </span>
                 </div>
               </button>
@@ -338,8 +338,8 @@ export function Checkout({ user, notify, onReceipt }) {
                 <input
                   aria-label={`Quantity ${item.product.name}`}
                   type="number"
-                  min="0.001"
-                  step="0.001"
+                  min={item.mode === "wholesale" ? "1" : "0.001"}
+                  step={item.mode === "wholesale" ? "1" : "0.001"}
                   value={item.quantity}
                   disabled={busy}
                   onChange={(e) => update(i, "quantity", e.target.value)}
@@ -352,7 +352,7 @@ export function Checkout({ user, notify, onReceipt }) {
                 >
                   <option value="retail">Piece / base unit</option>
                   <option value="wholesale">
-                    Pack × {item.product.pack_size}
+                    Pack × {quantity(item.product.pack_size)}
                   </option>
                 </select>
               </div>

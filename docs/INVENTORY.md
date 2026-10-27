@@ -33,3 +33,11 @@ The command compares cached quantity/value with grouped immutable movements, usi
 PostgreSQL `FOR UPDATE` serializes stock changes. The immutable ledger and cache commit together. Tests attempt two simultaneous checkouts against one remaining unit and assert exactly one physical sale, including the identical-key retry case. SQLite tests validate workflow behavior but do not prove PostgreSQL locking.
 
 Not implemented: batches, expiry, serial numbers, reservations, warehouses, stock counts, transfers and negative-stock overrides. Do not use this release for a business that requires these controls without adding and testing them first.
+
+## Quantity entry and display
+
+Wholesale sale/return quantities are whole packs. Pack sizes, reorder levels, purchase orders, receipts and manual stock adjustments accept whole base units. Retail sales/returns keep up to three decimal places for weighed or measured items. Prices remain decimal amounts; valuation retains its existing precision. Tax-rate precision is unchanged.
+
+Quantity displays omit trailing zeros (`12.000` becomes `12`). Fractional stock produced by retail trading remains accurate (`29.500` becomes `29.5`); history is never rounded or rewritten. Legacy fractional wholesale sales/returns retain their return eligibility. Existing fractional purchase balances may require a reviewed correction before completing receipts under the new whole-unit rule.
+
+The desktop sidebar scrolls vertically independently of the workspace on short screens or at increased zoom. The mobile horizontal navigation is unchanged.

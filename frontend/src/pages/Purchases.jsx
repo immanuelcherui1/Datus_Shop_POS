@@ -14,7 +14,7 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { api, operation } from "../api";
-import { cash, localDate, dateTime } from "../lib/format";
+import { quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
 export function Purchases({ notify }) {
@@ -149,6 +149,9 @@ export function Purchases({ notify }) {
                 <input
                   key={k}
                   aria-label={k}
+                  type="number"
+                  min={k === "quantity" ? "1" : "0"}
+                  step={k === "quantity" ? "1" : "0.000001"}
                   placeholder={
                     k === "quantity" ? "Base units" : "Cost / base unit"
                   }
@@ -230,7 +233,7 @@ export function Purchases({ notify }) {
                   `Product #${l.product_id}`}
               </span>
               <small>
-                {l.received} / {l.quantity} received · {cash(l.unit_cost)} each
+                {quantity(l.received)} / {quantity(l.quantity)} received · {cash(l.unit_cost)} each
               </small>
               {order.status !== "received" && (
                 <input
@@ -239,7 +242,7 @@ export function Purchases({ notify }) {
                   placeholder="Receive now"
                   type="number"
                   min="0"
-                  step="0.001"
+                  step="1"
                 />
               )}
             </div>

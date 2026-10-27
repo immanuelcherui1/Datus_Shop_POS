@@ -14,7 +14,7 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { api, operation } from "../api";
-import { cash, localDate, dateTime } from "../lib/format";
+import { quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
 export function Inventory({ notify }) {
@@ -96,6 +96,8 @@ export function Inventory({ notify }) {
         <Field
           label="Quantity delta · base units"
           name="quantity"
+          type="number"
+          step="1"
           placeholder="e.g. 10 or -2"
           required
         />
@@ -143,7 +145,7 @@ export function Inventory({ notify }) {
                 <td>{m.kind.replaceAll("_", " ")}</td>
                 <td className={Number(m.quantity) > 0 ? "positive" : ""}>
                   {Number(m.quantity) > 0 ? "+" : ""}
-                  {m.quantity}
+                  {quantity(m.quantity)}
                 </td>
                 <td>{cash(m.value)}</td>
                 <td>{m.reason}</td>
