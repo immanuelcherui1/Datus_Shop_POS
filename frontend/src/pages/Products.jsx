@@ -76,7 +76,7 @@ export function Products({ notify }) {
           <Search size={18} />
           <input
             aria-label="Search catalogue"
-            placeholder="Search catalogue…"
+            placeholder="Search catalogueâ€¦"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -160,7 +160,7 @@ export function Products({ notify }) {
                 <td>
                   {cash(p.wholesale_price)}{" "}
                   <small>
-                    × {quantity(p.pack_size)} {p.unit}
+                    Ã— {quantity(p.pack_size)} {p.unit}
                   </small>
                 </td>
                 <td>{quantity(p.quantity)}</td>
@@ -179,7 +179,7 @@ export function Products({ notify }) {
                       setForm({
                         id: p.id,
                         ...Object.fromEntries(
-                          Object.keys(emptyProduct).map((k) => [k, p[k]]),
+                          Object.keys(emptyProduct).map((k) => [k, ["pack_size", "reorder_level"].includes(k) ? quantity(p[k]) : p[k]]),
                         ),
                       })
                     }
