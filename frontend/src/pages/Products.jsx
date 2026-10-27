@@ -76,7 +76,7 @@ export function Products({ notify }) {
           <Search size={18} />
           <input
             aria-label="Search catalogue"
-            placeholder="Search catalogueâ€¦"
+            placeholder="Search catalogue…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -160,7 +160,7 @@ export function Products({ notify }) {
                 <td>
                   {cash(p.wholesale_price)}{" "}
                   <small>
-                    Ã— {quantity(p.pack_size)} {p.unit}
+                    × {quantity(p.pack_size)} {p.unit}
                   </small>
                 </td>
                 <td>{quantity(p.quantity)}</td>
