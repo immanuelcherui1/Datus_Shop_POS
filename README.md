@@ -2,7 +2,7 @@
 
 DATUS is a local-first point of sale and stock management application for a single Windows 11 computer. React provides the counter interface, Flask owns business rules, and PostgreSQL stores the authoritative records. Cash trading continues when the internet is unavailable; cloud backup is a separate, optional process.
 
-**Release status: initial implementation, not an audited or certified production release.** Read [known limitations](docs/STATUS.md) and complete the acceptance checklist before using real shop data. Live M-Pesa/card integrations and an Android APK are not included. No default passwords, credentials, or real customer data are shipped.
+**Current installer: 0.2.2 · Windows 11 x64. Release status: initial implementation, not an audited or certified production release.** Read [known limitations](docs/STATUS.md) and complete the acceptance checklist before using real shop data. Live M-Pesa/card integrations and an Android APK are not included. No default passwords, credentials, or real customer data are shipped.
 
 ## What is implemented
 
@@ -21,6 +21,9 @@ DATUS is a local-first point of sale and stock management application for a sing
 - User creation, password recovery through a local administrator command, audit viewer.
 - Database migrations, SQLite functional tests, PostgreSQL concurrency tests, frontend tests, and GitHub Actions.
 - Streaming encrypted PostgreSQL backup, restore to an empty database, and retryable S3-compatible upload.
+- Self-contained Windows installer, graphical owner setup, and a desktop controller.
+- Optional Tailscale Funnel access through a separate secured listener; local trading stays available offline.
+- Independently scrolling desktop navigation and horizontal mobile navigation.
 
 ## Architecture and source map
 
@@ -33,6 +36,7 @@ DATUS/
       models.py         Tables, constraints and immutable-history ORM guards
       schemas.py        Strict request validation and exact decimal inputs
       security.py       Roles, permissions and record scope
+      remote.py         Exact remote host/origin checks and HTTPS cookie requirements
       services.py       Inventory, checkout, receiving and return transactions
       api.py            HTTP routes, idempotency, serialization and daily reporting
       cli.py            Owner bootstrap, recovery, demo catalogue, reconciliation
@@ -45,7 +49,9 @@ DATUS/
     src/components/    Shared form, status and pagination components
     src/api.js         Cookie/CSRF transport and retry-key handling
     src/main.jsx       Application shell and permission-aware navigation
-  scripts/             Windows setup/startup and encrypted backup tooling
+  desktop/             First-run wizard, local/private PostgreSQL lifecycle, remote listener
+  packaging/           Reproducible Windows installer build and bundled runtimes
+  scripts/             Windows setup/startup, Funnel configuration and encrypted backup tooling
   docs/                Architecture, module guides, API, security and release limits
 ```
 
@@ -53,13 +59,68 @@ See [architecture and schema](docs/ARCHITECTURE.md), [inventory](docs/INVENTORY.
 
 ## Windows installer (recommended for the shop computer)
 
-A self-contained Windows x64 installer is now available through the **Windows installer** GitHub Actions workflow. It includes Python, the built interface and a private PostgreSQL instance. Open the DATUS shortcut and use the graphical first-run wizard to create your shop and owner account; no developer tools or separate database installation are needed.
+[Download DATUS 0.2.2 for Windows x64](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/40948484361/artifacts/12930786150). GitHub sign-in may be required. This verified artifact contains the installer, SHA-256 checksum, build information and acceptance-test result. It is retained until January 27, 2027; check later successful **Windows installer** workflow runs for newer builds.
 
-See [installer instructions](docs/INSTALLER.md) for downloads, checksums, data locations, upgrades and uninstall behavior. Current builds are unsigned. Your business database and backups are stored outside the application directory and retained when uninstalling.
+1. Download and extract the ZIP on the shop computer.
+2. Close the DATUS controller if upgrading, then run `DATUS-Setup-0.2.2-x64.exe` under the Windows account that operates the shop.
+3. Choose desktop and optional sign-in shortcuts. Python, the interface and private PostgreSQL are bundled; no developer tools are required.
+4. Open **DATUS**. On first launch, enter your shop name, owner username and a password of at least 12 characters. There are no default credentials. Upgrades keep the existing shop.
+5. Keep the controller open while trading. **Open DATUS** opens the browser at the correct local address; the installer chooses its own port, so do not assume it is 8080.
+6. Follow [First trading session](#first-trading-session) below.
 
-The commands below are the alternative developer/manual installation, not required when using the installer.
+Current installers are **unsigned**. Verify the source and compare `Get-FileHash .\DATUS-Setup-0.2.2-x64.exe -Algorithm SHA256` with the supplied `.sha256` file. The installer passed installation, first-run setup, checkout, encrypted backup, restart, separate remote-listener and data-preserving uninstall checks. Live hardware and public Funnel access still require verification on the shop computer.
+
+| Location | Purpose |
+| --- | --- |
+| `%LOCALAPPDATA%\Programs\DATUS` | Installed application and bundled runtimes |
+| `%LOCALAPPDATA%\DATUS` | Business database, configuration and logs |
+| `%LOCALAPPDATA%\DATUS\backups` | Encrypted backup files |
+| `%LOCALAPPDATA%\DATUS\backup.key` | Recovery key needed to decrypt backups |
+
+Uninstalling removes application files and shortcuts, **not business data or backups**. Reinstall under the same Windows account to reuse the shop. See [installer instructions](docs/INSTALLER.md) for upgrades, checksums and build details.
+
+## Remote access with Tailscale Funnel
+
+Funnel setup runs on the **shop computer**, using DATUS 0.2.2 or newer. It publishes a public HTTPS login page; visitors do not need Tailscale but must sign in to DATUS. Public access is disabled until you explicitly enable it. For private device-only access, consider Tailscale Serve instead; the commands here configure Funnel.
+
+1. Install DATUS, initialize the owner account if needed, and install [Tailscale for Windows](https://tailscale.com/download/windows). Sign in to your own tailnet on the shop computer.
+2. Close the DATUS controller. In PowerShell, under the same Windows account, run:
+
+```powershell
+$setup = "$env:LOCALAPPDATA\Programs\DATUS\_internal\setup\funnel.ps1"
+& $setup -Action Prepare
+```
+
+3. Reopen DATUS and wait for the local workspace to be ready. In the same PowerShell window, run:
+
+```powershell
+& $setup -Action Enable
+```
+
+4. Complete any Tailscale HTTPS/Funnel approval requested. If the command exits before enabling, finish the approval and rerun it. Use the printed `https://...ts.net` address from a phone on mobile data to test login, reports, receipts and logout.
+
+To inspect or turn off public access:
+
+```powershell
+& $setup -Action Status
+& $setup -Action Disable
+```
+
+The script checks the dedicated remote listener before forwarding it and refuses to silently replace existing Serve/Funnel services. The remote connection uses secure cookies, CSRF and exact host/origin checks. The database and backup folders are not exposed. Your separately hosted domain is not automatically connected to this Tailscale address.
+
+Leave the shop PC awake, online and DATUS running for remote access. Local trading keeps its original loopback connection and works offline. Funnel configuration persists across restarts until disabled; closing DATUS stops application access but does not remove the Funnel configuration. See [remote-access setup, security limits and troubleshooting](docs/REMOTE_ACCESS.md). No live Funnel endpoint was enabled during development.
+
+## Backups: what is available now
+
+In the installed DATUS controller, click **Create encrypted backup**. The file is saved under `%LOCALAPPDATA%\DATUS\backups`. Preserve a separate recovery copy of `backup.key`; encrypted backups cannot be restored without it.
+
+**Automatic hourly/daily scheduling is not built into the installer yet.** The desktop button creates a manual local backup. The source-code backup tool supports Windows Task Scheduler and retryable S3-compatible uploads when configured, but the installer button does not automatically upload files. Cloud accounts, storage and credentials are not provisioned by DATUS. SFTP/cPanel uploads are not implemented.
+
+Keep a copy of completed encrypted backups off the shop computer, with the recovery key stored separately. Do not put backups in a public website folder. A backup is a snapshot, not live synchronization or remote hosting. Practice restoration into an empty database before relying on it. See [backup configuration, scheduling and restore drills](docs/BACKUP.md).
 
 ## Manual Windows 11 installation
+
+This is the developer/source alternative. Skip these commands when using the installer.
 
 Use a local, non-synchronized folder, for example `C:\DATUS`. Do not place the PostgreSQL data directory in OneDrive or a network share.
 
@@ -149,6 +210,13 @@ Open **http://127.0.0.1:8080** in the browser. DATUS binds to loopback by defaul
 
 Example: a carton contains 12 units. Retail is KES 10 per unit, wholesale is KES 110 per carton. Selling two cartons reduces stock by 24 units and charges KES 220 before configured tax. Prices and pack conversion are copied into sale lines, so editing the product later does not alter the receipt.
 
+## Quantity rules
+
+- Prices and payment amounts retain decimal precision; retail quantities support up to three decimal places.
+- Wholesale sale/return quantities are whole packs. Pack sizes, reorder levels, purchasing, receiving and manual stock adjustments use whole base units.
+- Quantity displays remove padding (`12.000` becomes `12`) without rounding genuine fractional retail stock (`29.500` becomes `29.5`).
+- Historical records are not rewritten. Legacy fractional wholesale returns and purchase balances have special considerations described in [inventory rules](docs/INVENTORY.md).
+
 ## Development and verification
 
 For UI development, run the Flask/Waitress server on port 8080, then:
@@ -194,11 +262,3 @@ GitHub Actions runs both database suites against PostgreSQL 17, plus frontend te
 Complete [the security and operational checklist](docs/SECURITY.md). In particular, verify your tax setup, physical receipt printer, opening stock and valuation, real PostgreSQL test suite, backup recovery, staff permissions, and a full day-end cash reconciliation. Use a UPS and keep recovery material off this computer.
 
 Android, multi-device offline synchronization, live Daraja callbacks, fiscal/e-invoicing integration, credit accounts, and full accounting are future modules. The current application is single-business and single-shop by design; it is not a multi-tenant SaaS system.
-
-### Verified Windows installer download
-
-[Download DATUS Windows x64 installer](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/40948484361/artifacts/12930786150) (GitHub sign-in may be required). Extract the ZIP and run `DATUS-Setup-0.2.2-x64.exe`. Includes a SHA-256 checksum and acceptance-test result. This unsigned build passed installation, shop setup, checkout, backup, restart and uninstall checks. Artifact retention ends January 27, 2027; later successful workflow runs provide newer builds. See [installer instructions](docs/INSTALLER.md).
-
-### Optional public HTTPS access
-
-DATUS 0.2.2 adds a separate secured loopback listener for Tailscale Funnel. Follow [the shop-computer setup](docs/REMOTE_ACCESS.md). Public access is disabled until you explicitly configure and enable it; the existing local workspace stays available offline.
