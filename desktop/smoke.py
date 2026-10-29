@@ -34,7 +34,19 @@ def smoke_test(directory):
     password = secrets.token_urlsafe(24)
     try:
         installation.initialize('DATUS installer test', 'installer-test', password)
+        from desktop.runtime import available_port
+        remote_port = available_port()
+        while remote_port in (installation.settings['http_port'], installation.settings['database_port']):
+            remote_port = available_port()
+        (directory / 'remote-access.json').write_text(json.dumps({'origin': 'https://datus.smoke.ts.net', 'port': remote_port}), encoding='utf-8')
         installation.start_server()
+        # Exercise the real separate HTTP listener as the TLS proxy would reach it.
+        import urllib.request
+        request = urllib.request.Request(f'http://127.0.0.1:{remote_port}/api/health', headers={'Host': 'datus.smoke.ts.net'})
+        with urllib.request.urlopen(request, timeout=10) as response:
+            assert json.load(response)['remote_access'] is True
+        assert installation.remote_application.config['JWT_COOKIE_SECURE']
+        assert not installation.application.config.get('REMOTE_ORIGIN')
         client = installation.application.test_client()
         assert client.get('/').status_code == 200
         assert client.post('/api/auth/login', json={'username': 'installer-test', 'password': password}).status_code == 200
@@ -69,6 +81,6 @@ def smoke_test(directory):
         (directory / 'smoke-result.json').write_text(json.dumps({'ok': True, 'checks': [
             'first-run migrations', 'owner creation', 'static frontend', 'cookie authentication', 'wholesale checkout',
             'stock reconciliation', 'cash reconciliation', 'encrypted backup', 'restart preserves data and credentials',
-            'restricted runtime database permissions']}), encoding='utf-8')
+            'restricted runtime database permissions', 'separate remote listener with secure cookies']}), encoding='utf-8')
     finally:
         installation.stop()

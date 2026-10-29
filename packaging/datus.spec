@@ -6,11 +6,11 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy
 root = Path(SPECPATH).parent
 version_file = root / 'build/generated/version.txt'
 version_file.parent.mkdir(parents=True, exist_ok=True)
-version_file.write_text(os.environ.get('DATUS_VERSION', '0.2.1'), encoding='utf-8')
+version_file.write_text(os.environ.get('DATUS_VERSION', '0.2.2'), encoding='utf-8')
 postgres = Path(os.environ['DATUS_POSTGRES_DIR']).resolve()
 if not (postgres / 'bin' / 'postgres.exe').is_file():
     raise RuntimeError('DATUS_POSTGRES_DIR must point to verified PostgreSQL 17 Windows binaries.')
-datas = [(str(root / 'frontend/dist'), 'frontend/dist'),
+datas = [(str(root / 'scripts/funnel.ps1'), 'setup'), (str(root / 'frontend/dist'), 'frontend/dist'),
          (str(root / 'backend/migrations'), 'backend/migrations'),
          (str(root / 'docs'), 'docs'),
          (str(root / 'README.md'), '.'),

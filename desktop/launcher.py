@@ -106,6 +106,8 @@ def main():
         ttk.Button(form, text='Create encrypted backup', command=lambda: worker(installation.backup, 'backup')).pack(fill='x', pady=5)
         ttk.Button(form, text='Open data and backups folder', command=lambda: os.startfile(str(data))).pack(fill='x', pady=5)
         ttk.Label(form, text='Keep this window open while trading.\nClosing it safely stops DATUS and its private database.', wraplength=440).pack(anchor='w', pady=15)
+        if installation.remote_config:
+            ttk.Button(form, text='Open remote HTTPS workspace', command=lambda: webbrowser.open(installation.remote_config['origin'])).pack(fill='x', pady=5)
         webbrowser.open(installation.address)
 
     def close():

@@ -55,7 +55,7 @@ def run(command, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', default='0.2.1')
+    parser.add_argument('--version', default='0.2.2')
     parser.add_argument('--cache', type=Path, default=ROOT / '.packaging-cache')
     parser.add_argument('--skip-frontend', action='store_true', help='Use an already verified frontend production build')
     args = parser.parse_args()

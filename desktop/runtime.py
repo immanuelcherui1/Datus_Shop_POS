@@ -22,7 +22,7 @@ from werkzeug.security import generate_password_hash
 from datus.paths import resource_root, data_root
 
 _version_file = resource_root() / 'version.txt'
-VERSION = _version_file.read_text(encoding='utf-8').strip() if _version_file.exists() else '0.2.1'
+VERSION = _version_file.read_text(encoding='utf-8').strip() if _version_file.exists() else '0.2.2'
 
 
 def available_port():
@@ -51,6 +51,9 @@ class Installation:
         self.log_handle = None
         self.stopping = threading.Event()
         self.server_thread = None
+        self.web_servers = []
+        self.remote_config = None
+        self.remote_application = None
 
     def configure(self, business_name):
         self.data.mkdir(parents=True, exist_ok=True)
@@ -185,34 +188,60 @@ class Installation:
 
     def start_server(self):
         from waitress import create_server
-        self.server = create_server(self.application, host='127.0.0.1', port=self.settings['http_port'], threads=8)
+        from datus import create_app
+        from datus.remote import validate_origin
+        endpoints = [(self.application, self.settings['http_port'])]
+        config_path = self.data / 'remote-access.json'
+        if config_path.exists():
+            config = json.loads(config_path.read_text(encoding='utf-8-sig'))
+            origin = validate_origin(config['origin'])
+            port = config['port']
+            if type(port) is not int or not 1024 <= port <= 65535 or port in (self.settings['http_port'], self.settings['database_port']):
+                raise ValueError('Remote listener needs its own valid port.')
+            self.remote_config = config
+            self.remote_application = create_app({'REMOTE_ORIGIN': origin,
+                'JWT_COOKIE_SECURE': True, 'JWT_COOKIE_CSRF_PROTECT': True,
+                'JWT_ACCESS_COOKIE_NAME': 'datus_remote_access',
+                'RATELIMIT_KEY_PREFIX': 'datus-remote'})
+            endpoints.append((self.remote_application, port))
         self.stopping.clear()
-        def serve():
-            try:
-                self.server.run()
-            except OSError as error:
-                # Closing sockets from another thread can wake Windows select() with WSAENOTSOCK.
-                # Only this expected shutdown condition is suppressed; live server errors propagate.
-                if not (self.stopping.is_set() and getattr(error, 'winerror', None) == 10038):
-                    raise
-        self.server_thread = threading.Thread(target=serve, daemon=True, name='DATUS web server')
-        self.server_thread.start()
+        try:
+            for application, port in endpoints:
+                server = create_server(application, host='127.0.0.1', port=port, threads=8)
+                def serve(server=server):
+                    try:
+                        server.run()
+                    except OSError as error:
+                        if not (self.stopping.is_set() and getattr(error, 'winerror', None) == 10038):
+                            raise
+                thread = threading.Thread(target=serve, daemon=True, name=f'DATUS web {port}')
+                self.web_servers.append((server, thread))
+                thread.start()
+            self.server, self.server_thread = self.web_servers[0]
+        except Exception:
+            self.stop_web_servers()
+            raise
+
+    def stop_web_servers(self):
+        self.stopping.set()
+        for server, thread in self.web_servers:
+            server.close()
+            server.task_dispatcher.shutdown(cancel_pending=False, timeout=15)
+            thread.join(timeout=5)
+        self.web_servers.clear()
+        self.server = None
 
     def backup(self):
         from scripts.backup import main
         main(['backup'])
 
     def stop(self):
-        if self.server:
-            self.stopping.set()
-            self.server.close()
-            self.server.task_dispatcher.shutdown(cancel_pending=False, timeout=15)
-            self.server_thread.join(timeout=5)
-            self.server = None
-        if self.application:
-            from datus.extensions import db
-            with self.application.app_context():
-                db.session.remove(); db.engine.dispose()
+        self.stop_web_servers()
+        from datus.extensions import db
+        for application in (self.application, self.remote_application):
+            if application:
+                with application.app_context():
+                    db.session.remove(); db.engine.dispose()
         if self.settings and (self.cluster / 'postmaster.pid').exists():
             # Verify ownership by credentials and data_directory before stopping any server.
             with self.connect() as connection:

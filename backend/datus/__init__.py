@@ -34,6 +34,8 @@ def create_app(config=None):
         value = app.config[name]
         if not value or len(value) < 32 or 'GENERATE_' in value:
             raise RuntimeError(f'{name} must be a generated secret of at least 32 characters.')
+    from .remote import protect_remote
+    protect_remote(app)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s %(message)s')
     db.init_app(app)
     with app.app_context():
@@ -90,7 +92,7 @@ def create_app(config=None):
     @app.get('/api/health')
     def health():
         db.session.execute(db.text('SELECT 1'))
-        return jsonify(status='ok', application='DATUS')
+        return jsonify(status='ok', application='DATUS', remote_access=bool(app.config.get('REMOTE_ORIGIN')))
 
     @app.get('/')
     @app.get('/<path:path>')
