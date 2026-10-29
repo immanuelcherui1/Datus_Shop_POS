@@ -197,7 +197,7 @@ Android, multi-device offline synchronization, live Daraja callbacks, fiscal/e-i
 
 ### Verified Windows installer download
 
-[Download DATUS Windows x64 installer](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/40411121934/artifacts/12693581547) (GitHub sign-in may be required). Extract the ZIP and run `DATUS-Setup-0.2.0-x64.exe`. Includes a SHA-256 checksum and acceptance-test result. This unsigned build passed installation, shop setup, checkout, backup, restart and uninstall checks. Artifact retention ends January 24, 2027; later successful workflow runs provide newer builds. See [installer instructions](docs/INSTALLER.md).
+[Download DATUS Windows x64 installer](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/40948484361/artifacts/12930786150) (GitHub sign-in may be required). Extract the ZIP and run `DATUS-Setup-0.2.2-x64.exe`. Includes a SHA-256 checksum and acceptance-test result. This unsigned build passed installation, shop setup, checkout, backup, restart and uninstall checks. Artifact retention ends January 27, 2027; later successful workflow runs provide newer builds. See [installer instructions](docs/INSTALLER.md).
 
 ### Optional public HTTPS access
 

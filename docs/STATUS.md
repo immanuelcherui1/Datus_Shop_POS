@@ -54,3 +54,7 @@ Cloud credentials, a real receipt printer, real scanner and production payment p
 3. Add verified provider integration and reconciliation against real sandbox accounts.
 4. Add batch/expiry or credit/accounting only when business requirements justify them.
 5. Add secure Android LAN client, then design separate-device offline operation if required.
+
+## Remote access update — 29 October 2026
+
+DATUS 0.2.2 adds opt-in Tailscale Funnel configuration for a separate secured loopback listener. Local tests: 33 passed, 2 PostgreSQL-only tests skipped. GitHub integrity and Windows installer acceptance passed at commit 738115c (https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/40948484361). PowerShell parsing, CLI argument forwarding and occupied-listener checks also passed locally. Tests verify HTTPS cookie policy, origin/host checks, CSRF, login/logout, forwarded-header throttling, and a real second HTTP listener in the frozen package. Live tailnet approval and public mobile access remain shop-computer acceptance steps; no public endpoint was enabled during preparation. See REMOTE_ACCESS.md.
