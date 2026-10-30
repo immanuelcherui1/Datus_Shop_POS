@@ -1527,3 +1527,7 @@ header {
 }
 .brand-mark { background: white; }
 button.stat.panel { display: block; text-align: left; }
+
+/* Funds controls need a full-width grid, not a grid nested in one narrow cell. */
+.funds-form > p, .funds-form > fieldset { grid-column: 1 / -1; }
+.funds-form > fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }

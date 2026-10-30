@@ -90,7 +90,7 @@ export function FundsForm({ user, purchase, reversal, onDone, onCancel }) {
       </section>
     );
   return (
-    <form ref={formRef} className="panel form-grid" onSubmit={post}>
+    <form ref={formRef} className="panel form-grid funds-form" onSubmit={post}>
       <h3>
         {reversal
           ? `Reverse movement #${reversal.id}`
