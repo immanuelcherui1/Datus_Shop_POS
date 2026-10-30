@@ -53,6 +53,11 @@ def main():
             return
 
     root = tk.Tk()
+    from datus.paths import resource_root
+    icon_path = resource_root() / 'frontend/dist/branding/datus-icon.png'
+    if icon_path.exists():
+        root.brand_icon = tk.PhotoImage(file=str(icon_path))
+        root.iconphoto(True, root.brand_icon)
     root.title(f'DATUS {VERSION} — Retail & Wholesale')
     root.geometry('550x480'); root.minsize(500, 450)
     root.configure(bg='#f5f6f2')
@@ -63,7 +68,11 @@ def main():
     style.configure('Title.TLabel', font=('Segoe UI', 24, 'bold'))
     style.configure('TButton', padding=9, font=('Segoe UI', 10))
     frame = ttk.Frame(root, padding=28); frame.pack(fill='both', expand=True)
-    ttk.Label(frame, text='DATUS', style='Title.TLabel').pack(anchor='w')
+    if icon_path.exists():
+        root.brand_small = root.brand_icon.subsample(32, 32)
+        ttk.Label(frame, text=' DATUS', image=root.brand_small, compound='left', style='Title.TLabel').pack(anchor='w')
+    else:
+        ttk.Label(frame, text='DATUS', style='Title.TLabel').pack(anchor='w')
     ttk.Label(frame, text='Your shop. Every detail, accounted for.').pack(anchor='w', pady=(2, 20))
     form = ttk.Frame(frame); form.pack(fill='x')
     installation = Installation()

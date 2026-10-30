@@ -1,3 +1,4 @@
+import { BrandLogo, ThemeToggle } from "../components/Brand";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Package,
@@ -36,9 +37,12 @@ export function Login({ onLogin }) {
   }
   return (
     <main className="login">
+      <div className="login-theme">
+        <ThemeToggle />
+      </div>
       <section className="login-story">
         <div className="wordmark">
-          D<span>∕</span> DATUS
+          <BrandLogo />
         </div>
         <div>
           <span className="eyebrow">RETAIL & WHOLESALE</span>

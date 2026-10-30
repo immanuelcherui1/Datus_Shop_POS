@@ -1316,3 +1316,214 @@ pre {
     break-inside: avoid;
   }
 }
+
+/* Supplied artwork stays unchanged; the wordmark uses a white presentation panel. */
+.brand-logo {
+  display: block;
+  width: 190px;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1890 / 420;
+  background: white;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+.login-story .brand-logo {
+  width: 260px;
+}
+.receipt > .brand-logo {
+  width: 165px;
+  margin: 0 auto 18px;
+}
+.login-theme {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 2;
+}
+.theme-toggle {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+header {
+  gap: 16px;
+  flex-wrap: wrap;
+}
+@media (max-width: 780px) {
+  .login-theme {
+    position: static;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .sidebar .brand-logo {
+    width: 145px;
+  }
+  header .theme-toggle {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 8px;
+  }
+}
+
+/* Screen-only theme: printing always uses the existing light document palette. */
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --night-bg: #101815;
+    --night-panel: #1b2722;
+    --night-raised: #24352c;
+    --night-line: #3b5044;
+    --night-text: #edf3ee;
+    --night-muted: #b5c5b9;
+    color: var(--night-text);
+    background: var(--night-bg);
+  }
+  :root[data-theme="dark"]
+    :is(.panel, .product-card, .search, input, select, textarea, button) {
+    background: var(--night-panel);
+    color: var(--night-text);
+    border-color: var(--night-line);
+  }
+  :root[data-theme="dark"] :is(header, th, .search kbd, .bar) {
+    background: var(--night-raised);
+    color: var(--night-muted);
+    border-color: var(--night-line);
+  }
+  :root[data-theme="dark"]
+    :is(
+      p,
+      small,
+      .field > span,
+      .breadcrumb,
+      .breadcrumb b,
+      .header-date,
+      footer,
+      footer span,
+      .stat > span,
+      .stat > small,
+      .sum span,
+      .inline-field,
+      .section-title span:not(.badge),
+      .section-title small,
+      .empty,
+      .empty h3,
+      .product-card > div:last-child span
+    ) {
+    color: var(--night-muted);
+  }
+  :root[data-theme="dark"]
+    :is(td, .footnote, .cart-line, .receipt-input, .sum.total, footer) {
+    border-color: var(--night-line);
+  }
+  :root[data-theme="dark"] .sum.total span {
+    color: var(--night-text);
+  }
+  :root[data-theme="dark"] button:hover:not(:disabled) {
+    background: #334b3c;
+  }
+  :root[data-theme="dark"] .primary {
+    background: #a9d68f;
+    border-color: #a9d68f;
+    color: #102315;
+  }
+  :root[data-theme="dark"] .primary:hover:not(:disabled) {
+    background: #c0e6aa;
+  }
+  :root[data-theme="dark"] .link {
+    background: none;
+    color: #b2df9b;
+  }
+  :root[data-theme="dark"] :is(.welcome, .notice, .badge) {
+    background: #293b2d;
+    border-color: #48613e;
+    color: #d7e9ce;
+  }
+  :root[data-theme="dark"]
+    :is(.welcome-symbol, .product-art, .art-1, .art-2, .art-3) {
+    background: #2e4035;
+    color: #c5d9b6;
+    border-color: var(--night-line);
+  }
+  :root[data-theme="dark"] .badge.warning {
+    background: #473920;
+    color: #ffe09a;
+    border-color: #806735;
+  }
+  :root[data-theme="dark"] .product-card .low {
+    color: #ffe09a !important;
+  }
+  :root[data-theme="dark"] .error {
+    background: #442821;
+    color: #ffcab8;
+    border-color: #8e5442;
+  }
+  :root[data-theme="dark"] :is(.positive, .eyebrow) {
+    color: #b4dca0;
+  }
+  :root[data-theme="dark"] .bar span {
+    background: #a7cc89;
+  }
+  :root[data-theme="dark"] .sidebar {
+    background: #14271f;
+  }
+  :root[data-theme="dark"] nav button {
+    background: transparent;
+    color: #cfddd2;
+  }
+  :root[data-theme="dark"] nav button.selected {
+    background: #c2dda3;
+    color: #163021;
+  }
+  :root[data-theme="dark"] .user button {
+    background: none;
+    color: #cfddd2;
+  }
+  :root[data-theme="dark"] .login-story {
+    background: #14271f;
+  }
+  :root[data-theme="dark"] .login-story p {
+    color: #c0d1c3;
+  }
+  /* Paper previews keep their own contrast in both themes. */
+  :root[data-theme="dark"] .receipt-modal {
+    color-scheme: light;
+    background: white;
+    color: #111;
+  }
+  :root[data-theme="dark"]
+    .receipt
+    :is(p, small, span, th, td, h2, h3, b, strong) {
+    color: #111;
+  }
+  :root[data-theme="dark"] .receipt th {
+    background: #f3f5ef;
+  }
+  :root[data-theme="dark"] .receipt-actions button {
+    background: white;
+    color: #29463a;
+    border-color: #dce2da;
+  }
+}
+@media print {
+  .theme-toggle,
+  .login-theme {
+    display: none !important;
+  }
+  :root {
+    color-scheme: light;
+  }
+}
+@media screen {
+  :root[data-theme="dark"] .sidebar nav button { background: transparent; }
+  :root[data-theme="dark"] .sidebar nav button:hover:not(:disabled) { background: #334b3c; }
+  :root[data-theme="dark"] .sidebar nav button.selected { background: #c2dda3; color: #163021; }
+}
+.brand-mark { background: white; }
+button.stat.panel { display: block; text-align: left; }

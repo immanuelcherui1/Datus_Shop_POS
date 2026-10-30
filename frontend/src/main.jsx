@@ -1,3 +1,4 @@
+import { BrandLogo, BrandIcon, ThemeToggle } from "./components/Brand";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -88,10 +89,10 @@ function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="wordmark">
-          <span className="brand-icon">D∕</span> DATUS
+          <BrandLogo />
         </div>
         <div className="workspace">
-          <span className="shop-avatar">DS</span>
+          <BrandIcon />
           <div>
             <strong>{user.business_name}</strong>
             <small>Retail & wholesale</small>
@@ -152,6 +153,7 @@ function App() {
             </span>
             <h1>{active}</h1>
           </div>
+          <ThemeToggle />
           <div className="header-date">
             {new Intl.DateTimeFormat("en-KE", { dateStyle: "medium" }).format(
               new Date(),

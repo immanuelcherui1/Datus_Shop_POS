@@ -8,7 +8,7 @@ from datus.paths import resource_root
 
 def resource_check():
     root = resource_root()
-    for path in ['frontend/dist/index.html', 'backend/migrations/env.py',
+    for path in ['frontend/dist/branding/datus.ico', 'frontend/dist/branding/datus-icon.png', 'frontend/dist/branding/datus-logo.jpg', 'frontend/dist/theme-init.js', 'frontend/dist/index.html', 'backend/migrations/env.py',
                  'backend/migrations/versions/0001_initial_datus_transaction_schema.py', 'postgresql/bin/postgres.exe']:
         if not (root / path).is_file(): raise RuntimeError(f'Missing packaged resource: {path}')
     import psycopg

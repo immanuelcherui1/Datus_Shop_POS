@@ -10,6 +10,10 @@ Wholesale and retail are **two allocations of one inventory**, not duplicate inv
 
 **Before upgrading an existing shop:** close its trading sessions in the previous version, create a backup and keep the recovery key, then close the controller. Existing stock is assigned to wholesale; allocate the goods already on retail shelves before retail checkout. Never re-add those goods as opening stock. See [amendment workflows, migration policy and limitations](docs/AMENDMENTS.md). The verified 0.3.0 download below includes these amendments.
 
+## Logo and appearance (0.3.1)
+
+The supplied DATUS logo and icon now appear on sign-in, navigation, documents, browser tabs and Windows application/installer icons. Use **Dark mode / Light mode** on sign-in or in the workspace header. Your choice is saved in this browser; the first visit follows the device theme. Receipts and purchase orders retain white paper styling. See [branding and theme maintenance](docs/BRANDING.md). The verified 0.3.0 download below predates this update; the 0.3.1 build is being verified.
+
 ## What is implemented
 
 - Password authentication, HttpOnly JWT cookies, CSRF protection, login throttling, and backend role enforcement.

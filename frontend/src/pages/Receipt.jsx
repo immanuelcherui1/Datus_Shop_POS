@@ -1,3 +1,4 @@
+import { BrandLogo } from "../components/Brand";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Package,
@@ -61,6 +62,7 @@ export function Receipt({ sale, close }) {
           </button>
         </div>
         <article className="receipt">
+          <BrandLogo />
           <h2>{sale.business_name}</h2>
           <p>SALES RECEIPT</p>
           <p>

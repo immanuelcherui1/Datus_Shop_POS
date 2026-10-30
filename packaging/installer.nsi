@@ -3,7 +3,7 @@ Unicode true
 !include "LogicLib.nsh"
 !include "x64.nsh"
 !ifndef VERSION
-!define VERSION "0.2.2"
+!define VERSION "0.3.1"
 !endif
 !ifndef BUNDLE
 !error "Supply /DBUNDLE=absolute path to the PyInstaller DATUS folder"
@@ -24,6 +24,8 @@ VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "DATUS contributors"
 
+!define MUI_ICON "${BUNDLE}\_internal\frontend\dist\branding\datus.ico"
+!define MUI_UNICON "${BUNDLE}\_internal\frontend\dist\branding\datus.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TEXT "Install DATUS for this Windows account.$\r$\n$\r$\nPython, the shop interface and a private PostgreSQL database engine are included. No developer tools or internet connection are needed to run the installed application.$\r$\n$\r$\nOn first launch, create your shop owner account. Your business data is stored separately and kept when DATUS is uninstalled."
 !insertmacro MUI_PAGE_WELCOME
@@ -62,6 +64,7 @@ Section "DATUS application (required)" SEC_APP
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "DisplayIcon" "$INSTDIR\DATUS.exe,0"
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\DATUS" "NoRepair" 1
 SectionEnd

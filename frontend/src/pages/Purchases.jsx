@@ -1,3 +1,4 @@
+import { BrandLogo } from "../components/Brand";
 import { createPortal } from "react-dom";
 import React, { useEffect, useRef, useState } from "react";
 import { api, operation } from "../api";
@@ -439,6 +440,7 @@ export function Purchases({ notify, initialProducts = [], user }) {
                 <button onClick={() => setPrintOrder(null)}>Close</button>
               </div>
               <article className="receipt">
+                <BrandLogo />
                 <h2>{printOrder.business_name}</h2>
                 <h3>PURCHASE ORDER · {printOrder.status}</h3>
                 <p>
