@@ -1,0 +1,21 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { it, expect, vi, afterEach } from 'vitest';
+import { Purchases } from './Purchases';
+afterEach(()=>{ cleanup(); vi.restoreAllMocks(); });
+it('derives purchase costs and preserves an edited quote when converting units',async()=>{
+ const p={id:1,name:'Sugar',active:true,quantity:'24',reorder_level:'0',unit:'kg',pack_size:'12',cost_per_unit:'100',cost_per_pack:'1200'};
+ vi.spyOn(globalThis,'fetch').mockImplementation(async url=>({ok:true,json:async()=>({items:url.includes('/products')?[p]:[],pages:1})}));
+ render(<Purchases user={{currency:'KES'}} notify={()=>{}} />);
+ await screen.findByRole('option',{name:/Sugar/});
+ fireEvent.change(screen.getByLabelText('Product 1'),{target:{value:'1'}});
+ expect(screen.getByLabelText('Cost per selected unit 1')).toHaveValue(100);
+ fireEvent.change(screen.getByLabelText('Unit 1'),{target:{value:'pack'}});
+ expect(screen.getByLabelText('Cost per selected unit 1')).toHaveValue(1200);
+ fireEvent.change(screen.getByLabelText('Quantity 1'),{target:{value:'5'}});
+ expect(screen.getByText('Line: 6,000.00')).toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText('Cost per selected unit 1'),{target:{value:'600'}});
+ fireEvent.change(screen.getByLabelText('Unit 1'),{target:{value:'unit'}});
+ expect(screen.getByLabelText('Cost per selected unit 1')).toHaveValue(50);
+ expect(screen.getByText('Line: 250.00')).toBeInTheDocument();
+});

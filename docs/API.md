@@ -30,6 +30,7 @@ List endpoints generally return `{items, total, pages}` and accept `page` and `s
 | POST | `/register/close` | register; adjustment authority for variances |
 | GET | `/reports/daily?date=YYYY-MM-DD` | report; configured business timezone |
 | GET / POST | `/users` | users (owner) |
+| PUT | `/users/{id}` | users (owner) |
 | GET | `/audit` | audit |
 
 ## Examples
@@ -102,3 +103,7 @@ Use actual IDs returned by your database. The examples describe payload shape, n
 - `GET /api/reports/insights?start=YYYY-MM-DD&end=YYYY-MM-DD`: business-timezone range, maximum 367 inclusive days; current inventory health and range activity.
 
 All mutations retain the existing `Idempotency-Key`, authentication, CSRF and permission rules. Prices and costs are decimal strings. See [AMENDMENTS.md](AMENDMENTS.md).
+
+## Shop workflow refinements (0.3.2)
+
+See [shop workflows](SHOP-WORKFLOWS.md) for full request semantics. Cart lines are unique by `(product_id, mode)` so pack and unit lines may share a product. Product requests accept `reorder_packs` (whole packaging units); stored `reorder_level` remains base units. Adjustments require the current session user's `password` and accept `unit: unit|pack`; `unit_cost` stays per base unit. Owner-only `PUT /users/{id}` accepts username, role, active and optional password; removal sets active=false, retains history and revokes tokens.

@@ -35,6 +35,7 @@ def test_adjustment_password_and_pack_conversion(client,app):
     assert post(client,'/inventory/adjustments',body).status_code==403
     assert post(client,'/inventory/adjustments',{**body,'password':'wrong-password'}).status_code==403
     good={**body,'password':'test-only-password'}
+    assert post(client,'/inventory/adjustments',{**good,'quantity':'1000000000'}).status_code==400
     r=post(client,'/inventory/adjustments',good,'pack-adjust-retry');assert r.status_code==200,r.json
     assert D(r.json['quantity'])==24 and D(r.json['value'])==120
     assert post(client,'/inventory/adjustments',{**good,'password':'wrong-password'},'pack-adjust-retry').status_code==403

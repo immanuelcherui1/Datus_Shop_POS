@@ -226,6 +226,8 @@ def adjust():
     product = db.session.scalar(select(Product).where(Product.id == stock.product_id).with_for_update())
     data['entered_quantity'] = data['quantity']
     data['quantity'] *= product.pack_size if data['unit'] == 'pack' else 1
+    if abs(data['quantity']) > Decimal('1000000000'):
+        raise BadRequest('Converted adjustment exceeds the supported base-unit quantity.')
     value = service.valuation(data['quantity'] * data['unit_cost']) if data['quantity'] > 0 else -service.consume_value(stock, -data['quantity'], data['location'])
     service.move(stock, data['quantity'], value, 'adjustment', data['reason'], location=data['location'])
     service.audit('stock.adjusted', 'product', stock.product_id, serial(data))
