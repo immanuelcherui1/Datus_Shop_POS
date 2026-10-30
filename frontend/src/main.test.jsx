@@ -287,3 +287,25 @@ it.each([
     ]);
   });
 });
+
+it("clears the customer and split payments when starting a fresh sale", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => ({
+    ok: true,
+    json: async () => (url === "/api/register" ? { id: 1 } : { items: [] }),
+  }));
+  render(
+    <Checkout
+      user={{ id: 1, permissions: [] }}
+      notify={() => {}}
+      onReceipt={() => {}}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("Customer"), {
+    target: { value: "Previous customer" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "+ Split" }));
+  expect(screen.getByLabelText("Payment amount 2")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Clear", exact: true }));
+  expect(screen.getByLabelText("Customer")).toHaveValue("Walk-in customer");
+  expect(screen.queryByLabelText("Payment amount 2")).not.toBeInTheDocument();
+});

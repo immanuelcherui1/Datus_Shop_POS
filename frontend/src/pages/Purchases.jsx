@@ -4,7 +4,14 @@ import { BrandLogo } from "../components/Brand";
 import { createPortal } from "react-dom";
 import React, { useEffect, useRef, useState } from "react";
 import { api, operation } from "../api";
-import { unitPrice, cash, quantity, dateTime } from "../lib/format";
+import {
+  unitPrice,
+  cash,
+  quantity,
+  dateTime,
+  paymentLabel,
+  movementLabel,
+} from "../lib/format";
 import { Field, Pager } from "../components/ui";
 
 const blank = () => ({
@@ -508,8 +515,8 @@ export function Purchases({ notify, initialProducts = [], user }) {
               <summary>Payment history</summary>
               {o.payments.map((p) => (
                 <p key={p.id}>
-                  #{p.id} · {p.kind} · {p.method} · {cash(-Number(p.amount))} ·{" "}
-                  {p.reference || p.reason}
+                  #{p.id} · {movementLabel(p.kind)} · {paymentLabel(p.method)} ·{" "}
+                  {cash(-Number(p.amount))} · {p.reference || p.reason}
                 </p>
               ))}
             </details>

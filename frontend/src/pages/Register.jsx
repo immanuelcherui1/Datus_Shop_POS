@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FundsForm } from "../components/FundsForm";
 import { api, operation } from "../api";
-import { cash, dateTime } from "../lib/format";
+import { cash, dateTime, paymentLabel, movementLabel } from "../lib/format";
 import { Field, Pager } from "../components/ui";
 export function Register({ notify, user }) {
   const [session, setSession] = useState(undefined),
@@ -125,7 +125,7 @@ export function Register({ notify, user }) {
                 <Field label="Remarks" name="notes" maxLength={500} />
                 <p>
                   Any variance requires an authorized manager and an
-                  explanation. M-Pesa balance tracks recorded shop settlements
+                  explanation. M-Pesa balance tracks recorded shop settlements,
                   refunds and recorded money movements.
                 </p>
               </>
@@ -173,7 +173,7 @@ export function Register({ notify, user }) {
                   <small>{dateTime(m.created_at)}</small>
                 </td>
                 <td>
-                  {m.kind} · {m.method}
+                  {movementLabel(m.kind)} · {paymentLabel(m.method)}
                   {m.purchase_id && <small>PO-{m.purchase_id}</small>}
                 </td>
                 <td>{cash(m.amount)}</td>

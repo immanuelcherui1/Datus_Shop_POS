@@ -6,11 +6,22 @@ import { cash } from "../lib/format";
 // One recoverable funds operation per signed-in operator across these screens.
 // A failed response must never encourage a second payment with a fresh retry key.
 export function FundsForm({ user, purchase, reversal, onDone, onCancel }) {
+  const formRef = useRef(null);
+  useEffect(() => {
+    if (reversal)
+      formRef.current?.scrollIntoView?.({
+        behavior: "smooth",
+        block: "center",
+      });
+  }, [reversal?.id]);
   const [session, setSession] = useState(undefined);
   useEffect(() => {
     api("/register")
       .then(setSession)
-      .catch(() => setSession(null));
+      .catch((e) => {
+        setSession(null);
+        setError(e.message);
+      });
   }, []);
   const submit = useRef(null);
   if (!submit.current)
@@ -79,7 +90,7 @@ export function FundsForm({ user, purchase, reversal, onDone, onCancel }) {
       </section>
     );
   return (
-    <form className="panel form-grid" onSubmit={post}>
+    <form ref={formRef} className="panel form-grid" onSubmit={post}>
       <h3>
         {reversal
           ? `Reverse movement #${reversal.id}`

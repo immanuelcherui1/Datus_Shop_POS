@@ -113,6 +113,11 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
       clearTimeout(timer);
     };
   }, [JSON.stringify(lines), customer]);
+  function resetSale() {
+    setCart([]);
+    setCustomer("Walk-in customer");
+    setPayments([{ method: "cash", amount: "", reference: "" }]);
+  }
   function add(product) {
     if (busy || pending) return;
     if (!product.active || Number(available(product)) <= 0) {
@@ -159,7 +164,7 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
           reference: p.reference || null,
         })),
       });
-      setCart([]);
+      resetSale();
       setPayments([{ method: "cash", amount: "", reference: "" }]);
       onReceipt(sale);
       notify(`Sale ${sale.number} completed.`);
@@ -178,7 +183,7 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
     setError("");
     try {
       const sale = await submit.current.retry();
-      setCart([]);
+      resetSale();
       setPayments([{ method: "cash", amount: "", reference: "" }]);
       onReceipt(sale);
       notify(`Recovered sale ${sale.number}. Do not collect payment again.`);
@@ -216,7 +221,7 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
     const next = [...drafts, { cart, customer, mode }];
     setDrafts(next);
     sessionStorage.setItem(`datus-drafts-${user.id}`, JSON.stringify(next));
-    setCart([]);
+    resetSale();
   }
   function resume(index) {
     if (cart.length)
@@ -349,7 +354,7 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
           <h3>
             Current sale <Badge>{cart.length} items</Badge>
           </h3>
-          <button className="link" disabled={busy} onClick={() => setCart([])}>
+          <button className="link" disabled={busy} onClick={resetSale}>
             Clear
           </button>
         </div>

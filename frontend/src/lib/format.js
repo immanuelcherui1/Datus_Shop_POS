@@ -20,3 +20,19 @@ export function unitPrice(value) {
     maximumFractionDigits: 6,
   }).format(Number(value || 0));
 }
+
+export const paymentLabel = (method) =>
+  ({
+    cash: "Cash",
+    external_mobile: "M-Pesa",
+    external_bank: "Bank",
+    external_card: "Card",
+  })[method] || method;
+export const movementLabel = (kind) =>
+  ({
+    settlement: "Sale / refund",
+    purchase_payment: "Supplier payment",
+    cash_in: "Money in",
+    cash_out: "Money out",
+    reversal: "Reversal",
+  })[kind] || kind;
