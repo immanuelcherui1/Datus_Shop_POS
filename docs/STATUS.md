@@ -6,7 +6,11 @@ Authentication/authorization, product catalogue, stock ledger and reconciliation
 
 The frontend talks to the actual Flask API. Empty screens do not insert fabricated business metrics. Demonstration catalogue data is optional and starts with zero stock.
 
-## Verification record
+## Latest verification: 0.3.2
+
+Commit `2bcf0fc`: [integrity checks](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41061361562) passed 44 SQLite tests (3 PostgreSQL-only skipped), 47 PostgreSQL tests and 12 frontend tests plus production build. [Windows installer acceptance](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41061361459) passed. The supplied branding, persistent light/dark themes and all seven shop workflow refinements are included. User removal disables access while preserving history. See [SHOP-WORKFLOWS.md](SHOP-WORKFLOWS.md) for operator and API details.
+
+## Earlier verification record
 
 Local verification performed during implementation:
 

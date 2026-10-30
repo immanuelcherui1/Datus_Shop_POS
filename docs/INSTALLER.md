@@ -4,7 +4,7 @@ The desktop installer packages DATUS, Python, the built React interface, Postgre
 
 ## Operator setup
 
-1. Run `DATUS-Setup-0.3.0-x64.exe` on 64-bit Windows 11 under the Windows account that will run the shop.
+1. Run `DATUS-Setup-0.3.2-x64.exe` on 64-bit Windows 11 under the Windows account that will run the shop.
 2. Choose whether to create a desktop shortcut and whether to open DATUS at sign-in.
 3. Open **DATUS** from the desktop or Start menu.
 4. Enter the business name, owner username and a password of at least 12 characters. There are no default credentials.
@@ -37,7 +37,7 @@ This is a per-user application, not a Windows service. The optional sign-in shor
 GitHub Actions produces `DATUS-Windows-x64-installer` artifacts for installer-related commits. Download the installer and its `.sha256` file from a successful **Windows installer** run. Version tags publish the same files as GitHub Release assets after the packaged smoke test passes.
 
 ```powershell
-Get-FileHash .\DATUS-Setup-0.3.0-x64.exe -Algorithm SHA256
+Get-FileHash .\DATUS-Setup-0.3.2-x64.exe -Algorithm SHA256
 ```
 
 Compare the result with the accompanying checksum. Current builds are **unsigned** because no publisher code-signing certificate has been configured. Windows may show an unknown-publisher warning. Verify the file's source and checksum; do not turn off Windows security protections. Signing and clean-machine acceptance remain release tasks before broad shop deployment.
@@ -59,3 +59,7 @@ The frozen smoke test runs in a newly created empty directory and exercises owne
 Maintainers must review and update pinned tool URLs/digests when upgrading PostgreSQL or the installer compiler. The PostgreSQL major version is fixed at 17; a future major-version upgrade needs a separate data migration plan.
 
 Build references: [PyInstaller runtime paths](https://www.pyinstaller.org/en/stable/runtime-information.html), [NSIS downloads](https://nsis.sourceforge.io/Download), [PostgreSQL 17.11 release notes](https://www.postgresql.org/docs/release/17.11/). These explain packaging choices; test results are recorded separately in STATUS.md.
+
+## Verified 0.3.2 build
+
+[Download Windows installer](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41061361459/artifacts/12981110065). Includes the supplied branding, light/dark appearance and [shop workflow refinements](SHOP-WORKFLOWS.md). GitHub sign-in may be required. The artifact includes executable checksum and smoke-test results. The 0.3.0 migration precautions above apply when upgrading from earlier releases; 0.3.2 introduces no further database migration.
