@@ -37,7 +37,7 @@ def test_fractional_retail_sale_preserves_stock_and_wholesale_rejects(client):
 
 
 def test_wholesale_return_requires_whole_packs(client):
-    p = stock(client)
+    p = stock(client, location='wholesale')
     body = {'lines': [{'product_id': p['id'], 'quantity': '1', 'mode': 'wholesale'}],
             'payments': [{'method': 'cash', 'amount': '127.60'}]}
     sale = post(client, '/sales', body).json

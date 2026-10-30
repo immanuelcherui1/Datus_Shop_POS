@@ -50,7 +50,7 @@ def test_checkout_snapshot_idempotency_and_reconciliation(client):
     response = client.put(f"/api/products/{p['id']}", json=updated, headers={'Idempotency-Key': 'edit-product-123'})
     assert response.status_code == 200, response.json
     historical = client.get(f"/api/sales/{r.json['id']}").json
-    assert historical['lines'][0]['unit_price'] == '10.00'
+    assert historical['lines'][0]['unit_price'] == '10.000000'
     assert historical['total'] == '11.60'
     assert historical['lines'][0]['cost'] == '5.000000'
 
@@ -85,13 +85,13 @@ def test_split_payments_cash_reconciliation_and_reference_dedup(client):
     assert post(client, '/sales', sale_body(payments=payments)).status_code == 409
     assert client.get('/api/register').json['expected'] == '106.60'
     assert post(client, '/sales', sale_body(payments=[{'method': 'cash', 'amount': '10'}])).status_code == 400
-    closed = post(client, '/register/close', {'counted': '106.60'})
+    closed = post(client, '/register/close', {'counted': '106.60', 'counted_mpesa': '5'})
     assert closed.status_code == 200, closed.json
     assert closed.json['variance'] == '0.00'
 
 
 def test_wholesale_pack_consumes_base_units(client):
-    stock(client)
+    stock(client, location='wholesale')
     body = {'lines': [{'product_id': 1, 'quantity': '2', 'mode': 'wholesale'}], 'payments': [{'method': 'cash', 'amount': '255.20'}]}
     r = post(client, '/sales', body)
     assert r.status_code == 200, r.json

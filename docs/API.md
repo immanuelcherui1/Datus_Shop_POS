@@ -87,3 +87,18 @@ Register open/close:
 ```
 
 Use actual IDs returned by your database. The examples describe payload shape, not preinstalled records. No API permits deleting posted records, editing movements, overwriting balances, or accepting unverified provider success.
+
+## 0.3.0 amendments
+
+- `GET/POST /api/catalogue-options`: saved category/unit labels (catalog permission).
+- `POST /api/inventory/transfers`: `{product_id, quantity: "2", unit: "pack", reason}`; wholesale to retail, adjustment permission, idempotent.
+- Products expose `retail_quantity`, `wholesale_quantity`, total `quantity`, `inventory_value`, `cost_per_unit`, `cost_per_pack`. `sort=stock` prioritizes low quantities; `low=1` filters low active products.
+- Product input adds `packaging_unit` and optional ISO `expiry_date`.
+- `PUT /api/suppliers/{id}` updates contact/details; create/update rejects duplicate names.
+- Purchase input adds `status` (`draft` or `ordered`) and line `purchase_unit` (`unit` or `pack`). `unit_cost` is per selected unit. `PUT /api/purchases/{id}` edits/confirms drafts only. Receipt quantities remain base units; optional receipt-line `unit_cost` records actual base-unit cost.
+- Cart modes: `wholesale` (pack), `wholesale_unit`, `retail` (unit), `retail_pack`. Mixed channels are rejected. Existing settlement method identifiers remain unchanged.
+- Sales GET filters: `user_id`, `type`, `method` (`cash`, `external_mobile`, `other`), `start`, `end`. Cashiers still see only their own sales. Responses include operator/channel/payment details.
+- Register open adds `opening_mpesa`; close adds `counted_mpesa`. `notes` remains the API field behind **Remarks**. `GET /api/register/history` returns both reconciliations and actors.
+- `GET /api/reports/insights?start=YYYY-MM-DD&end=YYYY-MM-DD`: business-timezone range, maximum 367 inclusive days; current inventory health and range activity.
+
+All mutations retain the existing `Idempotency-Key`, authentication, CSRF and permission rules. Prices and costs are decimal strings. See [AMENDMENTS.md](AMENDMENTS.md).

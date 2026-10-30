@@ -22,7 +22,7 @@ from werkzeug.security import generate_password_hash
 from datus.paths import resource_root, data_root
 
 _version_file = resource_root() / 'version.txt'
-VERSION = _version_file.read_text(encoding='utf-8').strip() if _version_file.exists() else '0.2.2'
+VERSION = _version_file.read_text(encoding='utf-8').strip() if _version_file.exists() else '0.3.0'
 
 
 def available_port():
@@ -178,7 +178,8 @@ class Installation:
             connection.execute('GRANT USAGE ON SCHEMA public TO datus_app')
             connection.execute('GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA public TO datus_app')
             connection.execute('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO datus_app')
-            connection.execute('GRANT UPDATE ON product, stock, "user", purchase, purchase_line, cash_session, idempotency TO datus_app')
+            connection.execute('GRANT UPDATE ON supplier, product, stock, "user", purchase, purchase_line, cash_session, idempotency TO datus_app')
+            connection.execute('GRANT DELETE ON purchase_line TO datus_app')
         self.marker.write_text('Owner initialized. Do not delete this file.\n', encoding='utf-8')
         self.application = create_app()
 

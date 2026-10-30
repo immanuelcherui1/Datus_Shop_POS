@@ -16,9 +16,9 @@ Each sale line snapshots its total consumed cost. Product price edits cannot cha
 
 ## Packs
 
-Base quantity = sold quantity × conversion. Retail conversion is 1. Wholesale conversion is the product's pack size. Wholesale price is the price of **one pack**, not a discounted base-unit price. Pack size and selected conversion are copied to the sale line. Multiplication that requires more than three base-unit decimals is rejected.
+Base quantity = sold quantity × conversion. Unit sales have conversion 1; pack sales in either channel use the snapshotted pack size. Wholesale price is the price of **one pack**, not a discounted base-unit price. Pack size and selected conversion are copied to the sale line. Multiplication that requires more than three base-unit decimals is rejected.
 
-Purchases and adjustments use base units and cost per base unit. Receiving two cartons of 12 requires entering 24 units. The UI explains this; there is no implicit purchase pack conversion.
+Purchase orders support packs or base units and convert to base quantities/costs on the server. Goods receipts and adjustments use base units; receiving two cartons of 12 means entering 24 received units. Receipts can record actual cost separately from the ordered cost.
 
 ## Reconciliation
 
@@ -32,7 +32,7 @@ The command compares cached quantity/value with grouped immutable movements, usi
 
 PostgreSQL `FOR UPDATE` serializes stock changes. The immutable ledger and cache commit together. Tests attempt two simultaneous checkouts against one remaining unit and assert exactly one physical sale, including the identical-key retry case. SQLite tests validate workflow behavior but do not prove PostgreSQL locking.
 
-Not implemented: batches, expiry, serial numbers, reservations, warehouses, stock counts, transfers and negative-stock overrides. Do not use this release for a business that requires these controls without adding and testing them first.
+Not implemented: batch quantities/expiry tracking, serial numbers, reservations, warehouses, stock counts and negative-stock overrides. A manually maintained product expiry indicator and internal wholesale-to-retail allocation are implemented. Do not use this release for a business that requires these controls without adding and testing them first.
 
 ## Quantity entry and display
 
@@ -41,3 +41,7 @@ Wholesale sale/return quantities are whole packs. Pack sizes, reorder levels, pu
 Quantity displays omit trailing zeros (`12.000` becomes `12`). Fractional stock produced by retail trading remains accurate (`29.500` becomes `29.5`); history is never rounded or rewritten. Legacy fractional wholesale sales/returns retain their return eligibility. Existing fractional purchase balances may require a reviewed correction before completing receipts under the new whole-unit rule.
 
 The desktop sidebar scrolls vertically independently of the workspace on short screens or at increased zoom. The mobile horizontal navigation is unchanged.
+
+## Wholesale and retail allocations
+
+See [AMENDMENTS.md](AMENDMENTS.md) for allocation equations, migration policy, paired ledger entries, channel costing, historical returns and purchase workflows. Wholesale and retail are parts of one cached total; transfers never increase total business stock or value. Reconciliation checks total and retail balances; wholesale follows by subtraction.

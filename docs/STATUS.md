@@ -33,11 +33,11 @@ Cloud credentials, a real receipt printer, real scanner and production payment p
 - No live Daraja/card/bank initiation, webhook verification or provider reconciliation. External settlement is a privileged manual record only.
 - No credit balances, customer accounts, loyalty, expenses module, supplier payable ledger or full accounting journal.
 - Tax-exclusive pricing only; tax rate configured per product. No fiscal/e-invoicing integration or legal certification.
-- No batches, expiry, serials, reservations or formal physical-count workflow.
+- No batch-based expiry, serials, reservations or formal physical-count workflow. Product-level earliest expiry is a manually maintained indicator.
 - Product names, categories and suppliers are business-wide. Customer is an optional name snapshot, not a full customer profile.
 - Return entry requires operator-entered refund allocations; the server validates exact eligibility and rounded totals. No exchange wizard.
 - Suspended carts use browser sessionStorage and are not durable after browser session loss. Pending checkout requests and keys survive navigation/refresh in sessionStorage and must be recovered before a different checkout. Closing the browser session or clearing storage can still lose that record; inspect sales before repeating.
-- Product selection in adjustment/purchase forms currently loads the first 100 catalogue entries; POS and product screens provide search/pagination. Expand selectors before using a larger catalogue.
+- Product selectors show up to 100 search results; search by name/SKU to find additional products. Dashboard insight lists are not paginated.
 - Browser receipt print/PDF only; no direct ESC/POS, drawer pulse or fiscal printer driver.
 - The installer offers an optional sign-in shortcut and a desktop controller. Manual source deployments can use the scheduled startup script. Neither is an installed Windows service. Backup scheduling and the cloud bucket require operator configuration.
 - Installer builds are unsigned until a publisher certificate is configured.
@@ -58,3 +58,7 @@ Cloud credentials, a real receipt printer, real scanner and production payment p
 ## Remote access update — 29 October 2026
 
 DATUS 0.2.2 adds opt-in Tailscale Funnel configuration for a separate secured loopback listener. Local tests: 33 passed, 2 PostgreSQL-only tests skipped. GitHub integrity and Windows installer acceptance passed at commit 738115c (https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/40948484361). PowerShell parsing, CLI argument forwarding and occupied-listener checks also passed locally. Tests verify HTTPS cookie policy, origin/host checks, CSRF, login/logout, forwarded-header throttling, and a real second HTTP listener in the frozen package. Live tailnet approval and public mobile access remain shop-computer acceptance steps; no public endpoint was enabled during preparation. See REMOTE_ACCESS.md.
+
+## Wholesale/retail amendments — 30 October 2026
+
+Version 0.3.0 adds a shared inventory with wholesale/retail allocations, four selling modes, purchase draft editing/confirmation and print/PDF, supplier editing, actual receipt costs, catalogue suggestions, receipt accountability, session history and M-Pesa reconciliation, and interactive dashboard charts/stock lists. See [AMENDMENTS.md](AMENDMENTS.md) for migration requirements and precise limits. Verification is in progress; check the latest CI run before deployment.

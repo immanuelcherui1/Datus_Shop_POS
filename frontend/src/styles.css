@@ -1266,3 +1266,12 @@ pre {
     display: none;
   }
 }
+
+/* Expanded purchase documents keep browser print/PDF usable. */
+.purchase-print { max-width: 900px; width: 95vw; }
+.purchase-print .receipt { width: auto; }
+.purchase-line { flex-wrap: wrap; }
+.purchase-line select { min-width: 150px; }
+@media print { .purchase-print { width: 100%; max-width: none; } }
+
+@media print { body:has(.purchase-print) .app { display: none !important; } }

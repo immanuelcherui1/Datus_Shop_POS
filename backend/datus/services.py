@@ -5,7 +5,7 @@ from flask import current_app, g
 from sqlalchemy import select, func
 from werkzeug.exceptions import BadRequest, Conflict
 from .extensions import db
-from .models import (Product, Stock, Movement, Audit, Purchase, PurchaseLine, Receipt,
+from .models import (Product, Stock, Movement, Audit, Purchase, PurchaseLine, Receipt, User,
                      Sale, SaleLine, Payment, CashSession, CashMovement, Return, ReturnLine, Refund)
 from .security import allowed, scoped
 
@@ -41,35 +41,65 @@ def lock_stock(product_ids):
     return {row.product_id: row for row in rows}
 
 
-def move(stock, quantity, value, kind, reason, **links):
+def pool(stock, location):
+    if location == 'retail':
+        return stock.retail_quantity, stock.retail_value
+    return stock.quantity - stock.retail_quantity, stock.value - stock.retail_value
+
+
+def move(stock, quantity, value, kind, reason, location='wholesale', **links):
     if quantity == 0:
         raise BadRequest('Stock movement cannot be zero.')
-    if stock.quantity + quantity < 0:
-        raise Conflict('Insufficient stock. Refresh the cart and try again.')
+    available, worth = pool(stock, location)
+    if available + quantity < 0 or valuation(worth + value) < 0:
+        raise Conflict(f'Insufficient {location} stock or inventory value.')
     stock.quantity += quantity
     stock.value = valuation(stock.value + value)
-    if stock.value < 0:
-        raise Conflict('Inventory valuation would become negative.')
+    if location == 'retail':
+        stock.retail_quantity += quantity
+        stock.retail_value = valuation(stock.retail_value + value)
     db.session.add(Movement(product_id=stock.product_id, branch_id=stock.branch_id,
-        user_id=g.user.id, quantity=quantity, value=value, kind=kind, reason=reason, **links))
+        user_id=g.user.id, quantity=quantity, value=value, kind=kind, reason=reason,
+        location=location, **links))
 
 
-def consume_value(stock, quantity):
-    if quantity > stock.quantity or stock.quantity <= 0:
-        raise Conflict('Insufficient stock.')
-    # Consume the final residual value when the last unit leaves, preventing rounding dust.
-    return stock.value if quantity == stock.quantity else valuation(stock.value * quantity / stock.quantity)
+def consume_value(stock, quantity, location='wholesale'):
+    available, worth = pool(stock, location)
+    if quantity > available or available <= 0:
+        raise Conflict(f'Insufficient {location} stock.' + (' Allocate goods to retail before retail selling.' if location == 'retail' else ''))
+    return worth if quantity == available else valuation(worth * quantity / available)
+
+
+def transfer(data):
+    stock = lock_stock([data['product_id']])[data['product_id']]
+    product = db.session.scalar(select(Product).where(Product.id == stock.product_id).with_for_update())
+    quantity = data['quantity'] * (product.pack_size if data['unit'] == 'pack' else 1)
+    cost = consume_value(stock, quantity)
+    reference = 'TR-' + uuid4().hex[:16].upper()
+    # Both ledger legs and caches commit together under the same stock-row lock.
+    move(stock, -quantity, -cost, 'transfer_out', data['reason'], transfer_reference=reference)
+    move(stock, quantity, cost, 'transfer_in', data['reason'], location='retail', transfer_reference=reference)
+    audit('stock.transferred', 'product', product.id, {'reference':reference,'quantity':str(quantity)})
+    return {'reference':reference,'quantity':quantity,'wholesale_quantity':pool(stock,'wholesale')[0], 'retail_quantity':stock.retail_quantity}
+
+
+def sale_location(mode):
+    return 'wholesale' if mode.startswith('wholesale') else 'retail'
 
 
 def quote(data):
     unique_lines(data['lines'], 'product_id')
+    types = {sale_location(item['mode']) for item in data['lines']}
+    if len(types) != 1:
+        raise BadRequest('Wholesale and retail require separate transactions.')
     result = []
     for item in data['lines']:
         product = db.session.get(Product, item['product_id'])
         if not product or not product.active:
             raise BadRequest('Product is missing or inactive.')
-        conversion = product.pack_size if item['mode'] == 'wholesale' else Decimal('1')
-        price = product.wholesale_price if item['mode'] == 'wholesale' else product.retail_price
+        conversion = product.pack_size if item['mode'] in ('wholesale', 'retail_pack') else Decimal('1')
+        price = {'wholesale': product.wholesale_price, 'wholesale_unit': valuation(product.wholesale_price / product.pack_size),
+                 'retail': product.retail_price, 'retail_pack': product.retail_price * product.pack_size}[item['mode']]
         base_quantity = item['quantity'] * conversion
         if base_quantity != base_quantity.quantize(Decimal('.001')):
             raise BadRequest('This pack quantity requires more than three base-unit decimals.')
@@ -81,7 +111,7 @@ def quote(data):
         subtotal = gross - item['discount']
         tax = money(subtotal * product.tax_rate)
         result.append(dict(product_id=product.id, sku=product.sku, name=product.name,
-            unit=product.unit, mode=item['mode'], quantity=item['quantity'], conversion=conversion,
+            unit=product.packaging_unit if item['mode'] in ('wholesale', 'retail_pack') else product.unit, mode=item['mode'], quantity=item['quantity'], conversion=conversion,
             base_quantity=base_quantity, unit_price=price, discount=item['discount'],
             tax_rate=product.tax_rate, subtotal=subtotal, tax=tax))
     subtotal = sum((line['subtotal'] for line in result), ZERO)
@@ -110,9 +140,10 @@ def checkout(data):
     sale = Sale(number='DT-' + uuid4().hex[:16].upper(), branch_id=g.user.branch_id,
         user_id=g.user.id, session_id=register.id, currency=current_app.config['CURRENCY'],
         business_name=current_app.config['BUSINESS_NAME'], customer=data['customer'],
+        served_by=g.user.username, transaction_type=sale_location(calculated['lines'][0]['mode']),
         subtotal=calculated['subtotal'], tax=calculated['tax'], total=calculated['total'], cost=ZERO)
     # Set cost before first flush: posted rows cannot be updated, even by this service.
-    costs = [consume_value(stocks[line['product_id']], line['base_quantity']) for line in calculated['lines']]
+    costs = [consume_value(stocks[line['product_id']], line['base_quantity'], sale_location(line['mode'])) for line in calculated['lines']]
     sale.cost = sum(costs, ZERO)
     db.session.add(sale)
     db.session.flush()
@@ -120,7 +151,7 @@ def checkout(data):
         line = SaleLine(sale_id=sale.id, cost=cost, **values)
         db.session.add(line)
         db.session.flush()
-        move(stocks[line.product_id], -line.base_quantity, -cost, 'sale', sale.number, sale_line_id=line.id)
+        move(stocks[line.product_id], -line.base_quantity, -cost, 'sale', sale.number, location=sale_location(line.mode), sale_line_id=line.id)
     for values in data['payments']:
         if values['method'] != 'cash':
             # Manual settlement evidence is deliberately distinct from an integrated provider callback.
@@ -132,8 +163,8 @@ def checkout(data):
         payment = Payment(sale_id=sale.id, user_id=g.user.id, **values)
         db.session.add(payment)
         db.session.flush()
-        if payment.method == 'cash':
-            db.session.add(CashMovement(session_id=register.id, payment_id=payment.id,
+        if payment.method in ('cash', 'external_mobile'):
+            db.session.add(CashMovement(session_id=register.id, payment_id=payment.id, method=payment.method,
                 amount=payment.amount, reason=sale.number, user_id=g.user.id))
     audit('sale.posted', 'sale', sale.id, {'number': sale.number})
     # Optional fault injection used only by the test suite to prove full rollback.
@@ -145,6 +176,8 @@ def checkout(data):
 
 def receive(purchase_id, data):
     purchase = scoped(db.session.scalar(select(Purchase).where(Purchase.id == purchase_id).with_for_update()))
+    if purchase.status not in ('ordered', 'partial'):
+        raise Conflict('Confirm a draft purchase order before receiving goods.')
     unique_lines(data['lines'], 'line_id')
     lines = {line.id: line for line in purchase.lines}
     if any(item['line_id'] not in lines for item in data['lines']):
@@ -158,7 +191,7 @@ def receive(purchase_id, data):
         if line.received + item['quantity'] > line.quantity:
             raise Conflict('Received quantity exceeds the outstanding order quantity.')
         line.received += item['quantity']
-        move(stocks[line.product_id], item['quantity'], valuation(item['quantity'] * line.unit_cost),
+        move(stocks[line.product_id], item['quantity'], valuation(item['quantity'] * (item['unit_cost'] if item.get('unit_cost') is not None else line.unit_cost)),
              'purchase_receipt', f'Purchase {purchase.id}', receipt_id=receipt.id)
     purchase.status = 'received' if all(line.received == line.quantity for line in lines.values()) else 'partial'
     audit('purchase.received', 'receipt', receipt.id)
@@ -180,7 +213,7 @@ def post_return(sale_id, data):
             func.coalesce(func.sum(ReturnLine.amount), 0), func.coalesce(func.sum(ReturnLine.tax), 0),
             func.coalesce(func.sum(ReturnLine.cost), 0)).where(ReturnLine.sale_line_id == line.id)).one()
         # Preserve eligibility for legacy fractional wholesale sales/returns.
-        if (line.mode == 'wholesale' and line.quantity == line.quantity.to_integral_value()
+        if (line.mode != 'retail' and line.quantity == line.quantity.to_integral_value()
                 and previous[0] == previous[0].to_integral_value()
                 and item['quantity'] != item['quantity'].to_integral_value()):
             raise BadRequest('Wholesale returns must use whole packs.')
@@ -207,7 +240,7 @@ def post_return(sale_id, data):
         db.session.flush()
         if item['disposition'] == 'restock':
             move(stocks[line.product_id], item['quantity'] * line.conversion, cost,
-                 'return', data['reason'], return_line_id=row.id)
+                 'return', data['reason'], location=sale_location(line.mode) if sale.transaction_type else 'wholesale', return_line_id=row.id)
     for item in data['refunds']:
         payment = db.session.get(Payment, item['payment_id'])
         if not payment or payment.sale_id != sale.id:
@@ -220,8 +253,8 @@ def post_return(sale_id, data):
         row = Refund(return_id=returned.id, **item)
         db.session.add(row)
         db.session.flush()
-        if payment.method == 'cash':
-            db.session.add(CashMovement(session_id=register.id, refund_id=row.id, amount=-row.amount,
+        if payment.method in ('cash', 'external_mobile'):
+            db.session.add(CashMovement(session_id=register.id, refund_id=row.id, method=payment.method, amount=-row.amount,
                 reason=data['reason'], user_id=g.user.id))
     audit('sale.returned', 'return', returned.id, {'sale_id': sale.id})
     return returned

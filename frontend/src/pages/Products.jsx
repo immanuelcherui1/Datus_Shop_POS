@@ -22,6 +22,8 @@ const emptyProduct = {
   name: "",
   category: "General",
   unit: "piece",
+  packaging_unit: "pack",
+  expiry_date: "",
   retail_price: "",
   wholesale_price: "",
   pack_size: "1",
@@ -39,10 +41,12 @@ export function Products({ notify }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const submit = useRef(operation());
+  const [options,setOptions] = useState([]);
   async function load() {
     const x = await api(
       `/products?page=${page}&q=${encodeURIComponent(query)}`,
     );
+    setOptions(await api("/catalogue-options"));
     setItems(x.items);
     setPages(x.pages);
   }
@@ -57,7 +61,7 @@ export function Products({ notify }) {
     try {
       await submit.current(
         id ? `/products/${id}` : "/products",
-        { ...data, barcode: data.barcode || null },
+        { ...data, barcode: data.barcode || null, expiry_date: data.expiry_date || null },
         id ? "PUT" : "POST",
       );
       setForm(null);
@@ -106,13 +110,17 @@ export function Products({ notify }) {
                 key={k}
                 label={k.replaceAll("_", " ")}
                 value={form[k] ?? ""}
-                type={["pack_size", "reorder_level", "retail_price", "wholesale_price", "tax_rate"].includes(k) ? "number" : "text"}
+                list={["unit","packaging_unit","category"].includes(k) ? (k === "category" ? "categories" : "units") : undefined}
+                type={k === "expiry_date" ? "date" : ["pack_size", "reorder_level", "retail_price", "wholesale_price", "tax_rate"].includes(k) ? "number" : "text"}
                 min={k === "pack_size" ? "1" : "0"}
                 step={k === "tax_rate" ? "0.0001" : k.endsWith("price") ? "0.01" : "1"}
-                required={k !== "barcode"}
+                required={!["barcode","expiry_date"].includes(k)}
                 onChange={(e) => setForm({ ...form, [k]: e.target.value })}
               />
             ))}
+          <datalist id="categories">{options.filter(o=>o.kind==="category").map(o=><option key={o.id} value={o.name}/>)}</datalist>
+          <datalist id="units">{options.filter(o=>o.kind==="unit").map(o=><option key={o.id} value={o.name}/>)}</datalist>
+          <p>Search existing categories and units, or type a new label. New labels are saved with the product. Expiry is a manually maintained earliest on-hand expiry, not batch tracking.</p>
           <label>
             <input
               type="checkbox"

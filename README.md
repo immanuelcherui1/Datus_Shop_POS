@@ -2,22 +2,28 @@
 
 DATUS is a local-first point of sale and stock management application for a single Windows 11 computer. React provides the counter interface, Flask owns business rules, and PostgreSQL stores the authoritative records. Cash trading continues when the internet is unavailable; cloud backup is a separate, optional process.
 
-**Current installer: 0.2.2 · Windows 11 x64. Release status: initial implementation, not an audited or certified production release.** Read [known limitations](docs/STATUS.md) and complete the acceptance checklist before using real shop data. Live M-Pesa/card integrations and an Android APK are not included. No default passwords, credentials, or real customer data are shipped.
+**Source update: 0.3.0 (wholesale/retail amendments); last verified installer: 0.2.2 · Windows 11 x64. Release status: initial implementation, not an audited or certified production release.** Read [known limitations](docs/STATUS.md) and complete the acceptance checklist before using real shop data. Live M-Pesa/card integrations and an Android APK are not included. No default passwords, credentials, or real customer data are shipped.
+
+## Stock allocation upgrade (0.3.0)
+
+Wholesale and retail are **two allocations of one inventory**, not duplicate inventories. Purchases enter wholesale; authorized transfers allocate quantity and cost to retail without changing business totals. The update adds four selling-unit choices, Cash/M-Pesa reconciliation, supplier editing, draft purchase review and printing, reusable categories/units, receipt accountability, and interactive inventory insights.
+
+**Before upgrading an existing shop:** close its trading sessions in the previous version, create a backup and keep the recovery key, then close the controller. Existing stock is assigned to wholesale; allocate the goods already on retail shelves before retail checkout. Never re-add those goods as opening stock. See [amendment workflows, migration policy and limitations](docs/AMENDMENTS.md). The 0.2.2 download below does not include these amendments; use a verified 0.3.0 build when available.
 
 ## What is implemented
 
 - Password authentication, HttpOnly JWT cookies, CSRF protection, login throttling, and backend role enforcement.
 - Owner, manager, cashier, inventory, and accountant roles; records are scoped to the signed-in user's branch.
 - Product search by name, SKU or barcode; unique SKU/barcode; product edits with audit snapshots.
-- Retail price per base unit and wholesale price per pack, with explicit pack-to-base conversion.
+- Wholesale/pack, wholesale/unit, retail/unit and retail/pack prices, with server-calculated conversions and separate transaction channels.
 - Immutable stock movements, atomically updated quantity/value caches, and reconciliation.
-- Suppliers, purchase orders, partial goods receipts, and moving weighted-average costing.
+- Editable suppliers, draft/confirmed purchase orders with pack/base-unit costs, printable orders, partial actual goods receipts, and weighted-average costing per allocation.
 - Server-calculated quotes, authorized line discounts, exclusive tax, atomic checkout, and idempotent retries.
 - Cash and split settlement; privileged recording of **already independently verified** external payments.
 - Sales history, immutable receipt snapshots, browser printing / Save as PDF, suspended carts for the current browser session.
 - Controlled partial returns, cash/manual external refund allocations, and restock versus damaged disposition.
-- Register opening/closing, cash-only reconciliation, and manager/owner approval of explained variances.
-- Daily sales, refunds, tax, cost of goods, gross profit, low-stock count, payment breakdown, and CSV export.
+- Cash and M-Pesa opening/closing reconciliation, operator accountability, Remarks and session history; manager/owner authorization for explained variances.
+- Daily sales/refunds/profit reports, date-range charts, inventory health, actionable low-stock purchasing, payment/channel breakdowns and daily CSV export.
 - User creation, password recovery through a local administrator command, audit viewer.
 - Database migrations, SQLite functional tests, PostgreSQL concurrency tests, frontend tests, and GitHub Actions.
 - Streaming encrypted PostgreSQL backup, restore to an empty database, and retryable S3-compatible upload.
@@ -55,7 +61,7 @@ DATUS/
   docs/                Architecture, module guides, API, security and release limits
 ```
 
-See [architecture and schema](docs/ARCHITECTURE.md), [inventory](docs/INVENTORY.md), [checkout and payments](docs/PAYMENTS.md), [API reference](docs/API.md), [Windows operations](docs/WINDOWS.md), and [backup / restore](docs/BACKUP.md).
+See [amendment module guide](docs/AMENDMENTS.md), [architecture and schema](docs/ARCHITECTURE.md), [inventory](docs/INVENTORY.md), [checkout and payments](docs/PAYMENTS.md), [API reference](docs/API.md), [Windows operations](docs/WINDOWS.md), and [backup / restore](docs/BACKUP.md).
 
 ## Windows installer (recommended for the shop computer)
 

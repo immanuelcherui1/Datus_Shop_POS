@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from functools import wraps
 from zoneinfo import ZoneInfo
@@ -24,6 +24,8 @@ def serial(value):
         return format(value, 'f')
     if isinstance(value, datetime):
         return (value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value).isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
     if isinstance(value, dict):
         return {k: serial(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -37,6 +39,9 @@ def record(row):
 
 def sale_record(sale):
     result = record(sale)
+    result['served_by'] = sale.served_by or db.session.get(User, sale.user_id).username
+    result['transaction_type'] = sale.transaction_type or ('mixed (legacy)' if len({service.sale_location(l.mode) for l in sale.lines}) > 1 else service.sale_location(sale.lines[0].mode))
+    result['balance'] = str(sale.total - sum((p.amount for p in sale.payments), Decimal('0')))
     result['lines'] = [record(line) for line in sale.lines]
     result['payments'] = [record(payment) for payment in sale.payments]
     return result
@@ -138,12 +143,17 @@ def products():
     if query:
         statement = statement.where(db.or_(Product.name.icontains(query, autoescape=True),
             Product.sku.icontains(query, autoescape=True), Product.barcode == query))
-    result = page(statement.order_by(Product.name))
+    if request.args.get('low') == '1':
+        statement = statement.where(Product.active.is_(True), Stock.quantity <= Product.reorder_level)
+    ordering = (Stock.quantity > 0, Stock.quantity > Product.reorder_level, Stock.quantity, Product.name) if request.args.get('sort') == 'stock' else (Product.name,)
+    result = page(statement.order_by(*ordering))
     items = []
     for product in result.items:
         item = record(product)
         stock = db.session.get(Stock, (product.id, g.user.branch_id))
-        item.update(quantity=str(stock.quantity), inventory_value=str(stock.value))
+        item.update(quantity=str(stock.quantity), inventory_value=str(stock.value), retail_quantity=str(stock.retail_quantity),
+            wholesale_quantity=str(stock.quantity-stock.retail_quantity), cost_per_unit=str(service.valuation(stock.value/stock.quantity) if stock.quantity else 0),
+            cost_per_pack=str(service.valuation(stock.value/stock.quantity*product.pack_size) if stock.quantity else 0))
         items.append(item)
     return jsonify({'items': items, 'total': result.total, 'pages': result.pages})
 
@@ -153,6 +163,7 @@ def products():
 @mutation('product.create')
 def create_product():
     data = body(ProductSchema())
+    remember_options(data)
     product = Product(**data)
     db.session.add(product)
     db.session.flush()
@@ -170,6 +181,7 @@ def update_product(product_id):
         raise NotFound()
     before = record(product)
     data = body(ProductSchema())
+    remember_options(data)
     for key, value in data.items():
         setattr(product, key, value)
     service.audit('product.updated', 'product', product.id, {'before': before, 'after': record(product)})
@@ -192,8 +204,8 @@ def movements():
 def adjust():
     data = body(AdjustmentSchema())
     stock = service.lock_stock([data['product_id']])[data['product_id']]
-    value = service.valuation(data['quantity'] * data['unit_cost']) if data['quantity'] > 0 else -service.consume_value(stock, -data['quantity'])
-    service.move(stock, data['quantity'], value, 'adjustment', data['reason'])
+    value = service.valuation(data['quantity'] * data['unit_cost']) if data['quantity'] > 0 else -service.consume_value(stock, -data['quantity'], data['location'])
+    service.move(stock, data['quantity'], value, 'adjustment', data['reason'], location=data['location'])
     service.audit('stock.adjusted', 'product', stock.product_id, serial(data))
     return {'quantity': stock.quantity, 'value': stock.value}
 
@@ -212,6 +224,11 @@ def reconciliation(branch_id):
         totals, Stock.product_id == totals.c.product_id).where(Stock.branch_id == branch_id)).all()
     discrepancies = [dict(product_id=s.product_id, cached_quantity=str(s.quantity), ledger_quantity=str(q or 0),
         cached_value=str(s.value), ledger_value=str(v or 0)) for s, q, v in rows if s.quantity != (q or 0) or s.value != (v or 0)]
+    retail = dict((pid,(q,v)) for pid,q,v in db.session.execute(select(Movement.product_id,func.sum(Movement.quantity),func.sum(Movement.value)).where(Movement.branch_id==branch_id,Movement.location=='retail').group_by(Movement.product_id)))
+    for stock,_,_ in rows:
+        q,v = retail.get(stock.product_id,(Decimal('0'),Decimal('0')))
+        if stock.retail_quantity!=q or stock.retail_value!=v:
+            discrepancies.append(dict(product_id=stock.product_id,allocation='retail',cached_quantity=str(stock.retail_quantity),ledger_quantity=str(q),cached_value=str(stock.retail_value),ledger_value=str(v)))
     return {'ok': not discrepancies, 'checked': len(rows), 'discrepancies': discrepancies}
 
 
@@ -226,7 +243,9 @@ def suppliers():
 @require('purchase')
 @mutation('supplier.create')
 def create_supplier():
-    supplier = Supplier(**body(SupplierSchema()))
+    data = body(SupplierSchema())
+    check_supplier(data)
+    supplier = Supplier(**data)
     db.session.add(supplier)
     db.session.flush()
     service.audit('supplier.created', 'supplier', supplier.id)
@@ -237,7 +256,7 @@ def create_supplier():
 @require('purchase')
 def purchases():
     result = page(select(Purchase).where(Purchase.branch_id == g.user.branch_id).order_by(Purchase.id.desc()))
-    return jsonify({'items': [dict(record(x), lines=[record(line) for line in x.lines]) for x in result.items],
+    return jsonify({'items': [purchase_record(x) for x in result.items],
                     'total': result.total, 'pages': result.pages})
 
 
@@ -246,18 +265,10 @@ def purchases():
 @mutation('purchase.create')
 def create_purchase():
     data = body(PurchaseSchema())
-    service.unique_lines(data['lines'], 'product_id')
-    if not db.session.get(Supplier, data['supplier_id']):
-        raise BadRequest('Unknown supplier.')
-    service.lock_stock([line['product_id'] for line in data['lines']])
-    purchase = Purchase(supplier_id=data['supplier_id'], branch_id=g.user.branch_id, user_id=g.user.id)
-    db.session.add(purchase)
-    db.session.flush()
-    for line in data['lines']:
-        db.session.add(PurchaseLine(purchase_id=purchase.id, **line))
-    service.audit('purchase.ordered', 'purchase', purchase.id)
-    db.session.flush()
-    return dict(record(purchase), lines=[record(line) for line in purchase.lines])
+    purchase = Purchase(branch_id=g.user.branch_id, user_id=g.user.id, supplier_id=data['supplier_id'])
+    save_purchase(purchase, data)
+    service.audit('purchase.created', 'purchase', purchase.id)
+    return purchase_record(purchase)
 
 
 @api.post('/purchases/<int:purchase_id>/receipts')
@@ -288,8 +299,18 @@ def sales():
     statement = select(Sale).where(Sale.branch_id == g.user.branch_id)
     if g.user.role == 'cashier':
         statement = statement.where(Sale.user_id == g.user.id)
+    if request.args.get('user_id'):
+        statement = statement.where(Sale.user_id == request.args['user_id'])
+    if request.args.get('type'):
+        statement = statement.where(Sale.transaction_type == request.args['type'])
+    if request.args.get('method'):
+        methods = ['external_bank','external_card'] if request.args['method'] == 'other' else [request.args['method']]
+        statement = statement.where(Sale.payments.any(Payment.method.in_(methods)))
+    if request.args.get('start') or request.args.get('end'):
+        start, end = date_range()
+        statement = statement.where(Sale.created_at >= start, Sale.created_at < end)
     result = page(statement.order_by(Sale.id.desc()))
-    return jsonify({'items': [record(x) for x in result.items], 'total': result.total, 'pages': result.pages})
+    return jsonify({'items': [sale_record(x) for x in result.items], 'total': result.total, 'pages': result.pages})
 
 
 @api.get('/sales/<int:sale_id>')
@@ -310,9 +331,9 @@ def return_sale(sale_id):
     return record(service.post_return(sale_id, body(ReturnSchema())))
 
 
-def expected_cash(session):
-    amount = db.session.scalar(select(func.coalesce(func.sum(CashMovement.amount), 0)).where(CashMovement.session_id == session.id))
-    return session.opening + amount
+def expected_cash(session, method='cash'):
+    amount = db.session.scalar(select(func.coalesce(func.sum(CashMovement.amount), 0)).where(CashMovement.session_id == session.id, CashMovement.method == method))
+    return (session.opening if method == 'cash' else session.opening_mpesa) + amount
 
 
 @api.get('/register')
@@ -320,7 +341,7 @@ def expected_cash(session):
 def register():
     session = db.session.scalar(select(CashSession).where(CashSession.branch_id == g.user.branch_id,
         CashSession.closed_at.is_(None)))
-    return jsonify(dict(record(session), expected=str(expected_cash(session))) if session else None)
+    return jsonify(session_record(session) if session else None)
 
 
 @api.post('/register/open')
@@ -341,14 +362,17 @@ def close_register():
     data = body(CloseSessionSchema())
     session = service.open_register()
     expected = expected_cash(session)
-    if data['counted'] != expected:
+    expected_mpesa = expected_cash(session, 'external_mobile')
+    if data['counted'] != expected or data['counted_mpesa'] != expected_mpesa:
         allowed('adjust')
         if len(data['notes'].strip()) < 5:
-            raise BadRequest('Explain the cash variance in closing notes.')
+            raise BadRequest('Explain the cash or M-Pesa variance in Remarks.')
     session.counted, session.expected, session.notes = data['counted'], expected, data['notes']
+    session.counted_mpesa, session.expected_mpesa = data['counted_mpesa'], expected_mpesa
+    session.closed_by_id = g.user.id
     session.closed_at = now()
     service.audit('register.closed', 'cash_session', session.id, {'variance': str(session.counted - expected)})
-    return dict(record(session), variance=str(session.counted - expected))
+    return session_record(session)
 
 
 @api.get('/reports/daily')
@@ -408,3 +432,192 @@ def create_user():
 def audits():
     result = page(select(Audit).where(Audit.branch_id == g.user.branch_id).order_by(Audit.id.desc()))
     return jsonify({'items': [record(x) for x in result.items], 'pages': result.pages, 'total': result.total})
+
+
+# Catalogue labels remain compatible with historical products; saved options are reusable.
+def remember_options(data):
+    for kind, name in [('category',data['category']),('unit',data['unit']),('unit',data['packaging_unit'])]:
+        name = name.strip()
+        if not name:
+            raise BadRequest('Catalogue labels cannot be blank.')
+        if not db.session.scalar(select(CatalogueOption).where(CatalogueOption.kind==kind,func.lower(CatalogueOption.name)==name.lower())):
+            db.session.add(CatalogueOption(kind=kind,name=name))
+            db.session.flush()
+
+
+@api.get('/catalogue-options')
+@require('catalog')
+def catalogue_options():
+    return jsonify([record(x) for x in db.session.scalars(select(CatalogueOption).order_by(CatalogueOption.name))])
+
+
+@api.post('/catalogue-options')
+@require('catalog')
+@mutation('catalogue.create')
+def add_catalogue_option():
+    data = body(CatalogueSchema())
+    data['name'] = data['name'].strip()
+    if not data['name'] or (data['kind']=='unit' and len(data['name'])>30):
+        raise BadRequest('Unit labels must contain 1–30 characters.')
+    existing = db.session.scalar(select(CatalogueOption).where(CatalogueOption.kind==data['kind'],func.lower(CatalogueOption.name)==data['name'].lower()))
+    if existing:
+        return record(existing)
+    row = CatalogueOption(**data)
+    db.session.add(row); db.session.flush()
+    service.audit('catalogue.created','catalogue_option',row.id)
+    return record(row)
+
+
+@api.post('/inventory/transfers')
+@require('adjust')
+@mutation('stock.transfer')
+def transfer_stock():
+    return service.transfer(body(TransferSchema()))
+
+
+def check_supplier(data, exclude=None):
+    data['name'] = data['name'].strip()
+    if not data['name']:
+        raise BadRequest('Supplier name is required.')
+    query = select(Supplier).where(func.lower(Supplier.name)==data['name'].lower())
+    if exclude:
+        query = query.where(Supplier.id!=exclude)
+    if db.session.scalar(query):
+        raise Conflict('A supplier with this name already exists. Edit the existing supplier.')
+
+
+@api.put('/suppliers/<int:supplier_id>')
+@require('purchase')
+@mutation('supplier.update')
+def update_supplier(supplier_id):
+    row = db.session.get(Supplier,supplier_id)
+    if not row:
+        raise NotFound()
+    data = body(SupplierSchema()); check_supplier(data,supplier_id)
+    before = record(row)
+    for key,value in data.items():
+        setattr(row,key,value)
+    service.audit('supplier.updated','supplier',row.id,{'before':before,'after':record(row)})
+    return record(row)
+
+
+def purchase_record(purchase):
+    return dict(record(purchase), lines=[record(l) for l in purchase.lines],
+        supplier=record(db.session.get(Supplier,purchase.supplier_id)),
+        prepared_by=db.session.get(User,purchase.user_id).username,
+        business_name=current_app.config['BUSINESS_NAME'], currency=current_app.config['CURRENCY'],
+        total=str(service.money(sum((l.quantity*l.unit_cost for l in purchase.lines),Decimal('0')))))
+
+
+def save_purchase(purchase, data):
+    service.unique_lines(data['lines'],'product_id')
+    if not db.session.get(Supplier,data['supplier_id']):
+        raise BadRequest('Unknown supplier.')
+    service.lock_stock([l['product_id'] for l in data['lines']])
+    purchase.supplier_id, purchase.status = data['supplier_id'], data['status']
+    db.session.add(purchase); db.session.flush()
+    for values in data['lines']:
+        p = db.session.scalar(select(Product).where(Product.id==values['product_id']).with_for_update())
+        if not p.active:
+            raise BadRequest('Inactive products cannot be ordered.')
+        conversion = p.pack_size if values['purchase_unit']=='pack' else Decimal('1')
+        purchase.lines.append(PurchaseLine(product_id=p.id, quantity=values['quantity']*conversion,
+            unit_cost=service.valuation(values['unit_cost']/conversion), description=p.name,
+            unit=p.packaging_unit if values['purchase_unit']=='pack' else p.unit,
+            conversion=conversion, ordered_quantity=values['quantity'], ordered_unit_cost=values['unit_cost']))
+    db.session.flush()
+
+
+@api.put('/purchases/<int:purchase_id>')
+@require('purchase')
+@mutation('purchase.edit')
+def edit_purchase(purchase_id):
+    purchase = scoped(db.session.scalar(select(Purchase).where(Purchase.id==purchase_id).with_for_update()))
+    if purchase.status!='draft':
+        raise Conflict('Only draft purchase orders can be edited.')
+    for line in list(purchase.lines):
+        db.session.delete(line)
+    db.session.flush()
+    db.session.expire(purchase, ['lines'])
+    save_purchase(purchase,body(PurchaseSchema()))
+    service.audit('purchase.updated','purchase',purchase.id)
+    return purchase_record(purchase)
+
+
+def session_record(session):
+    result = record(session)
+    result['opened_by'] = db.session.get(User,session.user_id).username
+    result['closed_by'] = db.session.get(User,session.closed_by_id).username if session.closed_by_id else None
+    for suffix,method in [('', 'cash'),('_mpesa','external_mobile')]:
+        expected = getattr(session,'expected'+suffix) if session.closed_at else expected_cash(session,method)
+        result['expected'+suffix] = expected
+        result['transactions'+suffix] = expected-getattr(session,'opening'+suffix) if expected is not None else None
+        counted = getattr(session,'counted'+suffix)
+        result['variance'+suffix] = counted-expected if counted is not None and expected is not None else None
+    return serial(result)
+
+
+@api.get('/register/history')
+@require()
+def session_history():
+    if not ({'register','report','audit'} & PERMISSIONS[g.user.role]):
+        allowed('register')
+    result = page(select(CashSession).where(CashSession.branch_id==g.user.branch_id).order_by(CashSession.id.desc()))
+    return jsonify({'items':[session_record(s) for s in result.items],'pages':result.pages,'total':result.total})
+
+
+def date_range():
+    tz = ZoneInfo(current_app.config['BUSINESS_TIMEZONE'])
+    today = datetime.now(tz).date().isoformat()
+    try:
+        start = date.fromisoformat(request.args.get('start',today))
+        end = date.fromisoformat(request.args.get('end',today))
+    except ValueError:
+        raise BadRequest('Use YYYY-MM-DD dates.')
+    if end<start or (end-start).days>366:
+        raise BadRequest('Select a date range of at most 367 days.')
+    return datetime.combine(start,time.min,tzinfo=tz).astimezone(timezone.utc), datetime.combine(end+timedelta(days=1),time.min,tzinfo=tz).astimezone(timezone.utc)
+
+
+@api.get('/reports/insights')
+@require('report')
+def insights():
+    start,end = date_range()
+    tz = ZoneInfo(current_app.config['BUSINESS_TIMEZONE'])
+    sold = db.session.execute(select(SaleLine.product_id,func.sum(SaleLine.base_quantity),func.sum(SaleLine.subtotal+SaleLine.tax))
+        .join(Sale).where(Sale.branch_id==g.user.branch_id,Sale.created_at>=start,Sale.created_at<end).group_by(SaleLine.product_id)).all()
+    volume = {pid:q for pid,q,_ in sold}
+    rows = db.session.execute(select(Product,Stock).join(Stock).where(Stock.branch_id==g.user.branch_id,Product.active.is_(True))).all()
+    items = [dict(record(p),quantity=s.quantity,retail_quantity=s.retail_quantity,wholesale_quantity=s.quantity-s.retail_quantity,
+        inventory_value=s.value,sold_units=volume.get(p.id,Decimal('0'))) for p,s in rows]
+    moving = sorted([p for p in items if p['sold_units']>0],key=lambda p:p['sold_units'],reverse=True)
+    # Explicit relative classification: top quartile of products with sales is fast-moving.
+    fast = moving[:max(1,(len(moving)+3)//4)] if moving else []
+    slow = moving[len(fast):]
+    nonmoving = [p for p in items if not p['sold_units']]
+    today = datetime.now(tz).date()
+    expiring = [p for p in items if p['expiry_date'] and p['quantity']>0 and date.fromisoformat(p['expiry_date'])<=today+timedelta(days=30)]
+    sales_rows = db.session.scalars(select(Sale).where(Sale.branch_id==g.user.branch_id,Sale.created_at>=start,Sale.created_at<end)).all()
+    trends, channels, payments = {}, {}, {'Cash':Decimal('0'),'M-Pesa':Decimal('0'),'Other':Decimal('0')}
+    for sale in sales_rows:
+        day = (sale.created_at.replace(tzinfo=timezone.utc) if sale.created_at.tzinfo is None else sale.created_at).astimezone(tz).date().isoformat()
+        trends[day] = trends.get(day,Decimal('0'))+sale.total
+        channel = sale.transaction_type or 'legacy'
+        channels[channel] = channels.get(channel,Decimal('0'))+sale.total
+        for p in sale.payments:
+            label = 'Cash' if p.method=='cash' else 'M-Pesa' if p.method=='external_mobile' else 'Other'
+            payments[label] += p.amount
+    movement_rows = db.session.execute(select(Movement.created_at,Movement.quantity,Movement.kind).where(
+        Movement.branch_id==g.user.branch_id,Movement.created_at>=start,Movement.created_at<end)).all()
+    movements = {}
+    for dt,q,kind in movement_rows:
+        if kind in ('transfer_in','transfer_out'):
+            continue
+        day = (dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt).astimezone(tz).date().isoformat()
+        movements[day] = movements.get(day,Decimal('0'))+q
+    return jsonify(serial({'total_products':db.session.scalar(select(func.count(Product.id)).join(Stock).where(Stock.branch_id==g.user.branch_id)), 'active_products':len(items),'out_of_stock':[p for p in items if p['quantity']==0],
+        'low_stock':[p for p in items if p['quantity']<=Decimal(p['reorder_level'])], 'expiring':expiring,
+        'inventory_value':sum((p['inventory_value'] for p in items),Decimal('0')),
+        'fast':fast,'slow':slow,'nonmoving':nonmoving,'best_selling':moving[:10],
+        'sales_trend':dict(sorted(trends.items())),'stock_trend':dict(sorted(movements.items())),
+        'channels':channels,'payments':payments}))

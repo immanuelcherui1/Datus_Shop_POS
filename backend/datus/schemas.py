@@ -43,6 +43,8 @@ class ProductSchema(Schema):
     name = text(required=True)
     category = text(80, load_default='General')
     unit = text(30, load_default='piece')
+    packaging_unit = text(30, load_default='pack')
+    expiry_date = fields.Date(load_default=None, allow_none=True)
     retail_price = Exact(required=True)
     wholesale_price = Exact(required=True)
     pack_size = Exact(0, '1', required=True)
@@ -52,17 +54,20 @@ class ProductSchema(Schema):
 
 
 class PurchaseLineSchema(Schema):
+    purchase_unit = fields.String(load_default='unit', validate=validate.OneOf(['unit', 'pack']))
     product_id = fields.Integer(required=True, strict=True)
     quantity = Exact(0, '1', required=True)
     unit_cost = Exact(6, required=True)
 
 
 class PurchaseSchema(Schema):
+    status = fields.String(load_default='ordered', validate=validate.OneOf(['draft', 'ordered']))
     supplier_id = fields.Integer(required=True, strict=True)
     lines = fields.List(fields.Nested(PurchaseLineSchema), required=True, validate=validate.Length(min=1, max=100))
 
 
 class ReceiveLineSchema(Schema):
+    unit_cost = Exact(6, load_default=None, allow_none=True)
     line_id = fields.Integer(required=True, strict=True)
     quantity = Exact(0, '1', required=True)
 
@@ -74,14 +79,14 @@ class ReceiveSchema(Schema):
 class CartLineSchema(Schema):
     product_id = fields.Integer(required=True, strict=True)
     quantity = Exact(3, '0.001', required=True)
-    mode = fields.String(required=True, validate=validate.OneOf(['retail', 'wholesale']))
+    mode = fields.String(required=True, validate=validate.OneOf(['retail', 'wholesale', 'retail_pack', 'wholesale_unit']))
     discount = Exact(load_default=Decimal('0'))
 
 
     @validates_schema
     def whole_wholesale_packs(self, data, **kwargs):
-        if data['mode'] == 'wholesale' and data['quantity'] != data['quantity'].to_integral_value():
-            raise ValidationError({'quantity': ['Wholesale packs must be whole numbers.']})
+        if data['mode'] != 'retail' and data['quantity'] != data['quantity'].to_integral_value():
+            raise ValidationError({'quantity': ['Wholesale quantities and retail packs must be whole numbers.']})
 
 
 class PaymentSchema(Schema):
@@ -100,6 +105,7 @@ class CheckoutSchema(QuoteSchema):
 
 
 class AdjustmentSchema(Schema):
+    location = fields.String(load_default='wholesale', validate=validate.OneOf(['wholesale', 'retail']))
     product_id = fields.Integer(required=True, strict=True)
     quantity = Exact(0, '-1000000000', required=True)
     unit_cost = Exact(6, load_default=Decimal('0'))
@@ -107,15 +113,20 @@ class AdjustmentSchema(Schema):
 
 
 class SupplierSchema(Schema):
+    email = fields.String(load_default='', validate=validate.Length(max=160))
+    address = fields.String(load_default='', validate=validate.Length(max=500))
+    details = fields.String(load_default='', validate=validate.Length(max=500))
     name = text(required=True)
     phone = fields.String(load_default='', validate=validate.Length(max=40))
 
 
 class OpenSessionSchema(Schema):
+    opening_mpesa = Exact(load_default=Decimal('0'))
     opening = Exact(required=True)
 
 
 class CloseSessionSchema(Schema):
+    counted_mpesa = Exact(load_default=Decimal('0'))
     counted = Exact(required=True)
     notes = fields.String(load_default='', validate=validate.Length(max=500))
 
@@ -136,3 +147,15 @@ class ReturnSchema(Schema):
     reason = fields.String(required=True, validate=validate.Length(min=5, max=500))
     lines = fields.List(fields.Nested(ReturnLineSchema), required=True, validate=validate.Length(min=1, max=100))
     refunds = fields.List(fields.Nested(RefundSchema), required=True, validate=validate.Length(min=1, max=10))
+
+
+class TransferSchema(Schema):
+    product_id = fields.Integer(required=True, strict=True)
+    quantity = Exact(0, '1', required=True)
+    unit = fields.String(load_default='unit', validate=validate.OneOf(['unit', 'pack']))
+    reason = fields.String(required=True, validate=validate.Length(min=5, max=500))
+
+
+class CatalogueSchema(Schema):
+    kind = fields.String(required=True, validate=validate.OneOf(['category', 'unit']))
+    name = text(80, required=True)

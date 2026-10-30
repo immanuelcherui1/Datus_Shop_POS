@@ -31,6 +31,8 @@ class Product(db.Model):
     name = db.Column(db.String(160), nullable=False)
     category = db.Column(db.String(80), nullable=False, default='General')
     unit = db.Column(db.String(30), nullable=False, default='piece')
+    packaging_unit = db.Column(db.String(30), nullable=False, default='pack')
+    expiry_date = db.Column(db.Date)
     retail_price = db.Column(db.Numeric(18, 2), nullable=False)
     wholesale_price = db.Column(db.Numeric(18, 2), nullable=False)
     pack_size = db.Column(db.Numeric(18, 3), nullable=False, default=1)
@@ -48,13 +50,26 @@ class Stock(db.Model):
     branch_id = db.Column(db.ForeignKey('branch.id'), primary_key=True)
     quantity = db.Column(db.Numeric(18, 3), nullable=False, default=0)
     value = db.Column(db.Numeric(18, 6), nullable=False, default=0)
-    __table_args__ = (CheckConstraint('quantity >= 0 AND value >= 0'),)
+    retail_quantity = db.Column(db.Numeric(18, 3), nullable=False, default=0)
+    retail_value = db.Column(db.Numeric(18, 6), nullable=False, default=0)
+    __table_args__ = (CheckConstraint('quantity >= 0 AND value >= 0'),
+        CheckConstraint('retail_quantity >= 0 AND retail_quantity <= quantity AND retail_value >= 0 AND retail_value <= value'),)
 
 
 class Supplier(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(160), nullable=False)
     phone = db.Column(db.String(40), nullable=False, default='')
+    email = db.Column(db.String(160), nullable=False, default='')
+    address = db.Column(db.String(500), nullable=False, default='')
+    details = db.Column(db.String(500), nullable=False, default='')
+
+
+class CatalogueOption(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(20), nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    __table_args__ = (UniqueConstraint('kind', 'name'),)
 
 
 class Purchase(db.Model):
@@ -72,6 +87,11 @@ class PurchaseLine(db.Model):
     purchase_id = db.Column(db.ForeignKey('purchase.id'), nullable=False)
     product_id = db.Column(db.ForeignKey('product.id'), nullable=False)
     quantity = db.Column(db.Numeric(18, 3), nullable=False)
+    description = db.Column(db.String(160))
+    unit = db.Column(db.String(30))
+    conversion = db.Column(db.Numeric(18, 3), nullable=False, default=1)
+    ordered_quantity = db.Column(db.Numeric(18, 3))
+    ordered_unit_cost = db.Column(db.Numeric(18, 6))
     received = db.Column(db.Numeric(18, 3), nullable=False, default=0)
     unit_cost = db.Column(db.Numeric(18, 6), nullable=False)
     __table_args__ = (CheckConstraint('quantity > 0 AND received >= 0 AND received <= quantity AND unit_cost >= 0'),)
@@ -94,6 +114,10 @@ class CashSession(db.Model):
     counted = db.Column(db.Numeric(18, 2))
     expected = db.Column(db.Numeric(18, 2))
     notes = db.Column(db.String(500))
+    opening_mpesa = db.Column(db.Numeric(18, 2), nullable=False, default=0)
+    counted_mpesa = db.Column(db.Numeric(18, 2))
+    expected_mpesa = db.Column(db.Numeric(18, 2))
+    closed_by_id = db.Column(db.ForeignKey('user.id'))
     __table_args__ = (CheckConstraint('opening >= 0 AND (counted IS NULL OR counted >= 0)'),
         db.Index('one_open_register_per_branch', 'branch_id', unique=True,
                  postgresql_where=db.text('closed_at IS NULL'), sqlite_where=db.text('closed_at IS NULL')))
@@ -108,6 +132,8 @@ class Sale(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now, index=True)
     currency = db.Column(db.String(3), nullable=False)
     business_name = db.Column(db.String(160), nullable=False)
+    transaction_type = db.Column(db.String(20))
+    served_by = db.Column(db.String(80))
     customer = db.Column(db.String(160), nullable=False, default='Walk-in customer')
     subtotal = db.Column(db.Numeric(18, 2), nullable=False)
     tax = db.Column(db.Numeric(18, 2), nullable=False)
@@ -129,7 +155,7 @@ class SaleLine(db.Model):
     quantity = db.Column(db.Numeric(18, 3), nullable=False)
     conversion = db.Column(db.Numeric(18, 3), nullable=False)
     base_quantity = db.Column(db.Numeric(18, 3), nullable=False)
-    unit_price = db.Column(db.Numeric(18, 2), nullable=False)
+    unit_price = db.Column(db.Numeric(18, 6), nullable=False)
     discount = db.Column(db.Numeric(18, 2), nullable=False)
     tax_rate = db.Column(db.Numeric(7, 4), nullable=False)
     subtotal = db.Column(db.Numeric(18, 2), nullable=False)
@@ -191,6 +217,8 @@ class Movement(db.Model):
     branch_id = db.Column(db.ForeignKey('branch.id'), nullable=False)
     user_id = db.Column(db.ForeignKey('user.id'), nullable=False)
     kind = db.Column(db.String(30), nullable=False)
+    location = db.Column(db.String(20), nullable=False, default='wholesale')
+    transfer_reference = db.Column(db.String(40))
     quantity = db.Column(db.Numeric(18, 3), nullable=False)
     value = db.Column(db.Numeric(18, 6), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
@@ -205,6 +233,7 @@ class Movement(db.Model):
 class CashMovement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.ForeignKey('cash_session.id'), nullable=False)
+    method = db.Column(db.String(20), nullable=False, default='cash')
     payment_id = db.Column(db.ForeignKey('payment.id'), unique=True)
     refund_id = db.Column(db.ForeignKey('refund.id'), unique=True)
     amount = db.Column(db.Numeric(18, 2), nullable=False)

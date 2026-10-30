@@ -68,14 +68,14 @@ export function Receipt({ sale, close }) {
             <br />
             {dateTime(sale.created_at)}
           </p>
-          <p>{sale.customer}</p>
+          <p>{sale.customer}</p><p><strong>Served by: {sale.served_by}</strong><br/>Transaction: {sale.transaction_type}</p>
           <hr />
           {sale.lines.map((line) => (
             <div key={line.id} className="receipt-line">
               <strong>{line.name}</strong>
               <div>
                 <span>
-                  {quantity(line.quantity)} × {cash(line.unit_price)} · {line.mode}
+                  {quantity(line.quantity)} × {cash(line.unit_price)} · {line.unit} ({line.mode.replaceAll("_"," ")})
                 </span>
                 <b>{cash(line.subtotal)}</b>
               </div>
@@ -100,11 +100,12 @@ export function Receipt({ sale, close }) {
           {sale.payments.map((p) => (
             <div className="sum" key={p.id}>
               <span>
-                {p.method.replace("external_", "Recorded ")} {p.reference || ""}
+                {p.method === "cash" ? "Cash" : p.method === "external_mobile" ? "M-Pesa" : "Other"} {p.reference || ""}
               </span>
               <span>{cash(p.amount)}</span>
             </div>
           ))}
+          <div className="sum"><span>Balance</span><b>{cash(sale.balance)}</b></div>
           <hr />
           <p>
             Thank you for shopping with us.

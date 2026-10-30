@@ -38,6 +38,11 @@ export function Checkout({ user, notify, onReceipt }) {
     submit.current = operation(`datus-pending-checkout-${user.id}`);
   const [pending, setPending] = useState(() => submit.current.pending());
   const search = useRef();
+  const channel = mode.startsWith("wholesale") ? "wholesale" : "retail";
+  const modes = channel === "wholesale" ? [["wholesale", "Wholesale / Pack"], ["wholesale_unit", "Wholesale / Unit"]] : [["retail", "Retail / Unit"], ["retail_pack", "Retail / Pack"]];
+  const outstanding = Math.round(Number(quote?.total || 0)*100) - payments.reduce((n,p)=>n+Math.round(Number(p.amount||0)*100),0);
+  const available = (p) => p[`${channel}_quantity`];
+  const price = (p) => ({retail:Number(p.retail_price),retail_pack:Number(p.retail_price)*Number(p.pack_size),wholesale:Number(p.wholesale_price),wholesale_unit:Number(p.wholesale_price)/Number(p.pack_size)})[mode];
   useEffect(() => {
     let active = true;
     api(`/products?q=${encodeURIComponent(query)}&size=100`)
@@ -87,7 +92,7 @@ export function Checkout({ user, notify, onReceipt }) {
   }, [JSON.stringify(lines), customer]);
   function add(product) {
     if (busy || pending) return;
-    if (!product.active || Number(product.quantity) <= 0) {
+    if (!product.active || Number(available(product)) <= 0) {
       setError("This product is inactive or out of stock.");
       return;
     }
@@ -183,7 +188,7 @@ export function Checkout({ user, notify, onReceipt }) {
     }
   }
   function suspend() {
-    const next = [...drafts, { cart, customer }];
+    const next = [...drafts, { cart, customer, mode }];
     setDrafts(next);
     sessionStorage.setItem(`datus-drafts-${user.id}`, JSON.stringify(next));
     setCart([]);
@@ -192,6 +197,7 @@ export function Checkout({ user, notify, onReceipt }) {
     if (cart.length)
       return setError("Suspend or clear the current cart first.");
     const draft = drafts[index];
+    setMode(draft.mode || draft.cart[0]?.mode || "retail");
     setCart(draft.cart);
     setCustomer(draft.customer);
     const next = drafts.filter((_, i) => i !== index);
@@ -217,6 +223,10 @@ export function Checkout({ user, notify, onReceipt }) {
   return (
     <div className="checkout-grid">
       <section>
+        <div className="actions" role="group" aria-label="Transaction type">
+          {["wholesale","retail"].map(c=><button key={c} className={channel===c?"primary":""} disabled={busy || cart.length>0} onClick={()=>setMode(c)}>{c === "wholesale" ? "Wholesale" : "Retail"}</button>)}
+          {cart.length>0 && <small>Complete or clear this sale before changing channel.</small>}
+        </div>
         <div className="toolbar">
           <div className="search">
             <Search size={18} />
@@ -240,8 +250,7 @@ export function Checkout({ user, notify, onReceipt }) {
             value={mode}
             onChange={(e) => setMode(e.target.value)}
           >
-            <option value="retail">Retail</option>
-            <option value="wholesale">Wholesale / pack</option>
+            {modes.map(([value,label])=><option key={value} value={value}>{label}</option>)}
           </select>
         </div>
         <div className="section-title">
@@ -255,7 +264,7 @@ export function Checkout({ user, notify, onReceipt }) {
               <button
                 className="product-card"
                 key={p.id}
-                disabled={busy || Number(p.quantity) <= 0}
+                disabled={busy || Number(available(p)) <= 0}
                 onClick={() => add(p)}
               >
                 <div className={`product-art art-${i % 4}`}>
@@ -267,15 +276,15 @@ export function Checkout({ user, notify, onReceipt }) {
                 <div>
                   <b>
                     {cash(
-                      mode === "retail" ? p.retail_price : p.wholesale_price,
+                      price(p),
                     )}
                   </b>
                   <span
                     className={
-                      Number(p.quantity) <= Number(p.reorder_level) ? "low" : ""
+                      Number(available(p)) <= Number(p.reorder_level) ? "low" : ""
                     }
                   >
-                    {quantity(p.quantity)} in stock
+                    {quantity(available(p))} {p.unit} · {channel}
                   </span>
                 </div>
               </button>
@@ -338,8 +347,8 @@ export function Checkout({ user, notify, onReceipt }) {
                 <input
                   aria-label={`Quantity ${item.product.name}`}
                   type="number"
-                  min={item.mode === "wholesale" ? "1" : "0.001"}
-                  step={item.mode === "wholesale" ? "1" : "0.001"}
+                  min={item.mode !== "retail" ? "1" : "0.001"}
+                  step={item.mode !== "retail" ? "1" : "0.001"}
                   value={item.quantity}
                   disabled={busy}
                   onChange={(e) => update(i, "quantity", e.target.value)}
@@ -350,10 +359,7 @@ export function Checkout({ user, notify, onReceipt }) {
                   disabled={busy}
                   onChange={(e) => update(i, "mode", e.target.value)}
                 >
-                  <option value="retail">Piece / base unit</option>
-                  <option value="wholesale">
-                    Pack × {quantity(item.product.pack_size)}
-                  </option>
+                  {modes.map(([value,label])=><option key={value} value={value}>{label}</option>)}
                 </select>
               </div>
               {user.permissions.includes("discount") && (
@@ -425,13 +431,13 @@ export function Checkout({ user, notify, onReceipt }) {
                 {user.permissions.includes("external") && (
                   <>
                     <option value="external_mobile">
-                      Verified external mobile
+                      M-Pesa · verified
                     </option>
                     <option value="external_card">
-                      Verified external card
+                      Other · card
                     </option>
                     <option value="external_bank">
-                      Verified external bank
+                      Other · bank
                     </option>
                   </>
                 )}
@@ -481,6 +487,7 @@ export function Checkout({ user, notify, onReceipt }) {
             </div>
           ))}
         </div>
+        <p role="status">Outstanding balance: {cash(outstanding / 100)}</p>
         <small>
           Enter cash retained after change. External payments must already be
           independently verified.
@@ -492,7 +499,7 @@ export function Checkout({ user, notify, onReceipt }) {
         )}
         <button
           className="primary pay"
-          disabled={busy || !quote || quoteLoading}
+          disabled={busy || !quote || quoteLoading || outstanding !== 0}
           onClick={pay}
         >
           {busy ? "Completing sale…" : "Complete sale"}

@@ -1,3 +1,4 @@
+import {Insights} from "./Insights";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Package,
@@ -17,7 +18,7 @@ import { api, operation } from "../api";
 import { cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
-export function Reports({ dashboard, user }) {
+export function Reports({ dashboard, user, onPurchase }) {
   const [date, setDate] = useState(() => localDate(user.timezone)),
     [data, setData] = useState(null),
     [sales, setSales] = useState([]),
@@ -47,6 +48,7 @@ export function Reports({ dashboard, user }) {
   }
   return (
     <>
+      <Insights user={user} onPurchase={onPurchase}/>
       {dashboard && (
         <div className="welcome">
           <div>

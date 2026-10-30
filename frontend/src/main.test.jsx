@@ -108,6 +108,8 @@ it("does not add a stale product when a barcode Enter arrives before search resu
     barcode: sku,
     active: true,
     quantity: "24",
+    retail_quantity: "24",
+    wholesale_quantity: "0",
     reorder_level: "1",
     retail_price: "10",
     wholesale_price: "100",

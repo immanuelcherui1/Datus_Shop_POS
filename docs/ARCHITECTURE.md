@@ -25,14 +25,14 @@ User ──< Audit
 User ──< Idempotency
 ```
 
-These are physical singular table names generated from the SQLAlchemy models. The exact schema is in `backend/migrations/versions/0001_initial_datus_transaction_schema.py`; migration `0002` installs immutability triggers. Migrations are frozen snapshots, not `create_all()` calls against changing application models.
+These are physical singular table names generated from the SQLAlchemy models. The exact schema is in `backend/migrations/versions/0001_initial_datus_transaction_schema.py`; migration `0002` installs immutability triggers; `0003` adds allocation caches, purchase snapshots, reusable catalogue options, operator snapshots and M-Pesa session fields. Migrations are frozen snapshots, not `create_all()` calls against changing application models.
 
 The first release intentionally uses one business and one operating branch. `Branch` and branch foreign keys establish record scope and tests prove unauthorized branch records cannot be read. There is no branch-management UI, organization table, multi-tenant onboarding, warehouse transfer engine, or enterprise account provisioning. Product and supplier catalogue records are business-wide; stock and posted operations are branch-scoped.
 
 ## Design simplifications
 
 - Roles and permissions are an explicit, version-controlled matrix in `security.py`, not a configurable permission builder.
-- Category is a catalogue label, not a separate hierarchy.
+- Category/unit labels remain compatible strings on products, backed by reusable `CatalogueOption` suggestions (not a hierarchy).
 - `Payment` is both a settled-payment record and its allocation to one sale. Multiple rows implement split payment. Partial/credit payment is not accepted.
 - `Receipt` is a goods-receipt document. Its immutable movements store the delivered product quantities and values; the purchase lines hold ordered cost and derived received quantity.
 - Return quantities are calculated from immutable return lines, not from an editable sold-minus-returned field.
@@ -50,7 +50,7 @@ Deadlocks or temporary database errors return a retryable 503 without leaking SQ
 
 ## Precision and constraints
 
-- Money: `NUMERIC(18,2)`.
+- Settlement/line totals: `NUMERIC(18,2)`; divided wholesale unit price snapshots: `NUMERIC(18,6)`.
 - Quantity and pack conversion: `NUMERIC(18,3)`.
 - Stock values and cost snapshots: `NUMERIC(18,6)`.
 - Tax rate: fractional `NUMERIC(7,4)` (0.16 means 16%).
@@ -64,3 +64,5 @@ DB triggers block UPDATE/DELETE on posted sale, line, payment, movement, receipt
 ## Android extension
 
 The JSON API can later serve Android on the shop LAN after TLS, network exposure, mobile credential storage and device access are designed. Android is not required to run this version. Independently disconnected sales are a separate project: stock allocation, conflict policy, durable device queues and reconciliation must be defined before enabling them.
+
+See [AMENDMENTS.md](AMENDMENTS.md) for the shared-stock allocation model and upgrade invariants.

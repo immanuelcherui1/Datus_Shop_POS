@@ -61,6 +61,16 @@ def smoke_test(directory):
         post('/register/open', {'opening': '100'})
         sale = post('/sales', {'lines': [{'product_id': product['id'], 'quantity': '1', 'mode': 'wholesale'}],
             'payments': [{'method': 'cash', 'amount': '110'}]})
+        post('/inventory/transfers', {'product_id':product['id'],'quantity':'1','unit':'pack','reason':'Allocate retail smoke'})
+        retail = post('/sales', {'lines':[{'product_id':product['id'],'quantity':'1','mode':'retail'}],
+            'payments':[{'method':'external_mobile','amount':'10','reference':'SMOKE-MPESA-1'}]})
+        assert retail['served_by'] == 'installer-test' and retail['transaction_type'] == 'retail'
+        assert client.get('/api/register').json['expected_mpesa'] == '10.00'
+        supplier = post('/suppliers', {'name':'Installer supplier'})
+        draft = post('/purchases', {'supplier_id':supplier['id'],'status':'draft','lines':[{'product_id':product['id'],'quantity':'1','purchase_unit':'pack','unit_cost':'60'}]})
+        csrf = {'Idempotency-Key':secrets.token_hex(16),'X-CSRF-TOKEN':client.get_cookie('csrf_access_token').value}
+        assert client.put('/api/suppliers/'+str(supplier['id']),json={'name':'Updated supplier'},headers=csrf).status_code == 200
+        assert client.put('/api/purchases/'+str(draft['id']),json={'supplier_id':supplier['id'],'status':'ordered','lines':[{'product_id':product['id'],'quantity':'2','purchase_unit':'pack','unit_cost':'60'}]},headers={**csrf,'Idempotency-Key':secrets.token_hex(16)}).status_code == 200
         assert client.get('/api/inventory/reconciliation').json['ok']
         assert client.get('/api/register').json['expected'] == '210.00'
         snapshot = client.get(f"/api/sales/{sale['id']}").json
@@ -81,6 +91,6 @@ def smoke_test(directory):
         (directory / 'smoke-result.json').write_text(json.dumps({'ok': True, 'checks': [
             'first-run migrations', 'owner creation', 'static frontend', 'cookie authentication', 'wholesale checkout',
             'stock reconciliation', 'cash reconciliation', 'encrypted backup', 'restart preserves data and credentials',
-            'restricted runtime database permissions', 'separate remote listener with secure cookies']}), encoding='utf-8')
+            'stock allocations and retail checkout', 'M-Pesa reconciliation', 'supplier edit and draft confirmation', 'restricted runtime database permissions', 'separate remote listener with secure cookies']}), encoding='utf-8')
     finally:
         installation.stop()
