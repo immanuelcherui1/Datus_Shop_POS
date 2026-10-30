@@ -109,7 +109,7 @@ it("does not add a stale product when a barcode Enter arrives before search resu
     active: true,
     quantity: "24",
     retail_quantity: "24",
-    wholesale_quantity: "0",
+    wholesale_quantity: "24",
     reorder_level: "1",
     retail_price: "10",
     wholesale_price: "100",
@@ -176,4 +176,22 @@ it("uses wholesale units and blocks an underallocated split payment", async () =
   expect(screen.getByRole("button",{name:/Complete sale/})).toBeDisabled();
   fireEvent.change(screen.getByLabelText("Payment amount 2"),{target:{value:"60"}});
   expect(screen.getByRole("button",{name:/Complete sale/})).toBeEnabled();
+});
+
+it.each([['wholesale', 'wholesale_unit'], ['retail_pack', 'retail']])('keeps pack and unit cart lines separate for %s', async (pack, unit) => {
+  const product = {id:9,name:'Sugar',sku:'SUGAR',active:true,quantity:'102',wholesale_quantity:'51',retail_quantity:'51',reorder_level:'0',retail_price:'150',wholesale_price:'7500',pack_size:'50'};
+  const fetcher = vi.spyOn(globalThis,'fetch').mockImplementation(async (url, options) => ({ok:true,json:async()=> url.includes('/sales/quote') ? {subtotal:'7650',tax:'0',total:'7650'} : {items:[product]}}));
+  render(<Checkout user={{id:8,permissions:[]}} notify={()=>{}} onReceipt={()=>{}} />);
+  expect(screen.getByLabelText('Default selling mode')).toHaveValue('wholesale');
+  if (unit === 'retail') fireEvent.click(screen.getByRole('button',{name:'Retail'}));
+  fireEvent.change(screen.getByLabelText('Default selling mode'),{target:{value:pack}});
+  fireEvent.click(await screen.findByRole('button',{name:/^SUGAR/}));
+  fireEvent.change(screen.getByLabelText('Default selling mode'),{target:{value:unit}});
+  fireEvent.click(screen.getByRole('button',{name:/^SUGAR/}));
+  expect(screen.getAllByLabelText('Quantity Sugar')).toHaveLength(2);
+  await waitFor(()=> {
+    const calls=fetcher.mock.calls.filter(([url])=>url.includes('/sales/quote'));
+    expect(calls.length).toBeGreaterThan(0);
+    expect(JSON.parse(calls.at(-1)[1].body).lines.map(l=>l.mode)).toEqual([pack,unit]);
+  });
 });

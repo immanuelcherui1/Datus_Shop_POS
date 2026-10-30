@@ -28,7 +28,7 @@ const emptyProduct = {
   wholesale_price: "",
   pack_size: "1",
   tax_rate: "0",
-  reorder_level: "5",
+  reorder_packs: "5",
   active: true,
 };
 
@@ -63,6 +63,7 @@ export function Products({ notify }) {
         id ? `/products/${id}` : "/products",
         {
           ...data,
+          reorder_packs: data.reorder_packs || null,
           barcode: data.barcode || null,
           expiry_date: data.expiry_date || null,
         },
@@ -112,7 +113,11 @@ export function Products({ notify }) {
             .map((k) => (
               <Field
                 key={k}
-                label={k.replaceAll("_", " ")}
+                label={
+                  k === "reorder_packs"
+                    ? `Reorder level · ${form.packaging_unit || "packs"}`
+                    : k.replaceAll("_", " ")
+                }
                 value={form[k] ?? ""}
                 list={
                   ["unit", "packaging_unit", "category"].includes(k)
@@ -126,7 +131,7 @@ export function Products({ notify }) {
                     ? "date"
                     : [
                           "pack_size",
-                          "reorder_level",
+                          "reorder_packs",
                           "retail_price",
                           "wholesale_price",
                           "tax_rate",
@@ -142,7 +147,10 @@ export function Products({ notify }) {
                       ? "0.01"
                       : "1"
                 }
-                required={!["barcode", "expiry_date"].includes(k)}
+                required={
+                  !["barcode", "expiry_date"].includes(k) &&
+                  !(k === "reorder_packs" && form.id)
+                }
                 onChange={(e) => setForm({ ...form, [k]: e.target.value })}
               />
             ))}
@@ -174,6 +182,8 @@ export function Products({ notify }) {
             Active product
           </label>
           <p className="form-hint">
+            Reorder level is entered in whole packaging units. On existing
+            products, leave it blank to preserve the current threshold.
             Wholesale price is per pack. Retail price is per base unit. Tax is
             exclusive: enter 0.16 for 16%. Confirm your applicable rates.
           </p>
@@ -230,11 +240,15 @@ export function Products({ notify }) {
                     onClick={() =>
                       setForm({
                         id: p.id,
+                        reorder_level: p.reorder_level,
                         ...Object.fromEntries(
                           Object.keys(emptyProduct).map((k) => [
                             k,
-                            ["pack_size", "reorder_level"].includes(k)
-                              ? quantity(p[k])
+                            ["pack_size", "reorder_packs"].includes(k)
+                              ? k === "reorder_packs" &&
+                                !Number.isInteger(Number(p[k]))
+                                ? ""
+                                : quantity(p[k])
                               : p[k],
                           ]),
                         ),

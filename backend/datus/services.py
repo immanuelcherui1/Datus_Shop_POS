@@ -88,7 +88,9 @@ def sale_location(mode):
 
 
 def quote(data):
-    unique_lines(data['lines'], 'product_id')
+    keys = [(line['product_id'], line['mode']) for line in data['lines']]
+    if len(keys) != len(set(keys)):
+        raise BadRequest('Combine duplicate product and selling-unit lines.')
     types = {sale_location(item['mode']) for item in data['lines']}
     if len(types) != 1:
         raise BadRequest('Wholesale and retail require separate transactions.')
@@ -143,7 +145,18 @@ def checkout(data):
         served_by=g.user.username, transaction_type=sale_location(calculated['lines'][0]['mode']),
         subtotal=calculated['subtotal'], tax=calculated['tax'], total=calculated['total'], cost=ZERO)
     # Set cost before first flush: posted rows cannot be updated, even by this service.
-    costs = [consume_value(stocks[line['product_id']], line['base_quantity'], sale_location(line['mode'])) for line in calculated['lines']]
+    # Pack and unit lines may share a product. Reserve their combined quantity and
+    # cost in order so the final line consumes valuation rounding residue exactly.
+    remaining = {pid: pool(stock, sale.transaction_type) for pid,stock in stocks.items()}
+    costs = []
+    for line in calculated['lines']:
+        available, worth = remaining[line['product_id']]
+        quantity = line['base_quantity']
+        if quantity > available or available <= 0:
+            raise Conflict(f'Insufficient {sale.transaction_type} stock for the combined pack and unit quantities.')
+        cost = worth if quantity == available else valuation(worth * quantity / available)
+        costs.append(cost)
+        remaining[line['product_id']] = (available - quantity, worth - cost)
     sale.cost = sum(costs, ZERO)
     db.session.add(sale)
     db.session.flush()

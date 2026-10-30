@@ -3,7 +3,7 @@ Unicode true
 !include "LogicLib.nsh"
 !include "x64.nsh"
 !ifndef VERSION
-!define VERSION "0.3.1"
+!define VERSION "0.3.2"
 !endif
 !ifndef BUNDLE
 !error "Supply /DBUNDLE=absolute path to the PyInstaller DATUS folder"

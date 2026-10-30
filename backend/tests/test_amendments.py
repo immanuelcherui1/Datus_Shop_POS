@@ -8,7 +8,7 @@ from datus.models import Stock, Movement, Sale, Payment, CashMovement, Audit
 
 def seed(client, qty='60'):
     p=product(client)
-    assert post(client,'/inventory/adjustments',{'product_id':p['id'],'quantity':qty,'unit_cost':'5','reason':'Opening wholesale'}).status_code==200
+    assert post(client,'/inventory/adjustments',{'password':'test-only-password','product_id':p['id'],'quantity':qty,'unit_cost':'5','reason':'Opening wholesale'}).status_code==200
     assert post(client,'/register/open',{'opening':'100','opening_mpesa':'200'}).status_code==200
     return p
 

@@ -140,9 +140,9 @@ def test_permissions_and_branch_scope(client, app):
     assert post(other, '/sales', sale_body()).status_code == 409
     cashier = app.test_client()
     cashier.post('/api/auth/login', json={'username': 'cashier', 'password': 'test-only-password'})
-    assert post(cashier, '/inventory/adjustments', {'product_id': 1, 'quantity': '1', 'reason': 'unauthorized'}).status_code == 403
+    assert post(cashier, '/inventory/adjustments', {'password': 'test-only-password', 'product_id': 1, 'quantity': '1', 'reason': 'unauthorized'}).status_code == 403
     assert cashier.get('/api/reports/daily').status_code == 403
-    assert post(client, '/inventory/adjustments', {'product_id': 1, 'quantity': '1', 'unit_cost': '5', 'reason': ''}).status_code == 400
+    assert post(client, '/inventory/adjustments', {'password': 'test-only-password', 'product_id': 1, 'quantity': '1', 'unit_cost': '5', 'reason': ''}).status_code == 400
     body = sale_body(); body['lines'][0]['discount'] = '1'
     assert post(cashier, '/sales', body).status_code == 403
 

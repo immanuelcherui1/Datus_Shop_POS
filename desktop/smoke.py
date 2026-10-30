@@ -57,7 +57,7 @@ def smoke_test(directory):
             return response.json
         product = post('/products', {'sku': 'INSTALLER-TEST', 'name': 'Installer test item',
             'retail_price': '10', 'wholesale_price': '110', 'pack_size': '12'})
-        post('/inventory/adjustments', {'product_id': product['id'], 'quantity': '24', 'unit_cost': '5', 'reason': 'Installer smoke test'})
+        post('/inventory/adjustments', {'password': password, 'product_id': product['id'], 'quantity': '24', 'unit_cost': '5', 'reason': 'Installer smoke test'})
         post('/register/open', {'opening': '100'})
         sale = post('/sales', {'lines': [{'product_id': product['id'], 'quantity': '1', 'mode': 'wholesale'}],
             'payments': [{'method': 'cash', 'amount': '110'}]})

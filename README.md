@@ -12,7 +12,17 @@ Wholesale and retail are **two allocations of one inventory**, not duplicate inv
 
 ## Logo and appearance (0.3.1)
 
-The supplied DATUS logo and icon now appear on sign-in, navigation, documents, browser tabs and Windows application/installer icons. Use **Dark mode / Light mode** on sign-in or in the workspace header. Your choice is saved in this browser; the first visit follows the device theme. Receipts and purchase orders retain white paper styling. See [branding and theme maintenance](docs/BRANDING.md). The verified 0.3.0 download below predates this update; the 0.3.1 build is being verified.
+The supplied DATUS logo and icon now appear on sign-in, navigation, documents, browser tabs and Windows application/installer icons. Use **Dark mode / Light mode** on sign-in or in the workspace header. Your choice is saved in this browser; the first visit follows the device theme. Receipts and purchase orders retain white paper styling. See [branding and theme maintenance](docs/BRANDING.md). The verified 0.3.0 download below predates this update; the 0.3.2 build includes the additional shop workflows below.
+
+## Shop workflow refinements (0.3.2)
+
+- New sales default to Wholesale / Pack. Add the same item in pack and unit modes to create separate lines in either channel (for example, 7,500 + 150 = 7,650 before any configured tax).
+- Product reorder thresholds are entered in whole packaging units. Existing thresholds remain unchanged until edited.
+- Stock adjustments require the signed-in user's password and accept positive/negative base units or packs. Added-stock cost is always per base unit.
+- Purchase orders derive costs from the current stock valuation, convert the cost when switching units, and show line and order totals. Enter the supplier's actual cost when needed, especially if there is no stock history/value.
+- Owners can edit usernames, passwords and roles or remove access. Historical records are retained, and existing sessions are revoked.
+
+See [shop workflow details and API notes](docs/SHOP-WORKFLOWS.md). The verified 0.3.0 installer below predates these changes; check the latest Windows build before installing them.
 
 ## What is implemented
 
@@ -28,7 +38,7 @@ The supplied DATUS logo and icon now appear on sign-in, navigation, documents, b
 - Controlled partial returns, cash/manual external refund allocations, and restock versus damaged disposition.
 - Cash and M-Pesa opening/closing reconciliation, operator accountability, Remarks and session history; manager/owner authorization for explained variances.
 - Daily sales/refunds/profit reports, date-range charts, inventory health, actionable low-stock purchasing, payment/channel breakdowns and daily CSV export.
-- User creation, password recovery through a local administrator command, audit viewer.
+- Owner-controlled user creation, credential/role updates and access removal with session revocation; administrator password recovery and audit viewer.
 - Database migrations, SQLite functional tests, PostgreSQL concurrency tests, frontend tests, and GitHub Actions.
 - Streaming encrypted PostgreSQL backup, restore to an empty database, and retryable S3-compatible upload.
 - Self-contained Windows installer, graphical owner setup, and a desktop controller.

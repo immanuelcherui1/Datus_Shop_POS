@@ -63,7 +63,7 @@ def product(client, sku='RICE'):
 
 def stock(client, quantity='30', location='retail'):
     p = product(client)
-    r = post(client, '/inventory/adjustments', {'product_id': p['id'], 'quantity': quantity, 'unit_cost': '5', 'reason': 'Opening balance', 'location': location})
+    r = post(client, '/inventory/adjustments', {'password': 'test-only-password', 'product_id': p['id'], 'quantity': quantity, 'unit_cost': '5', 'reason': 'Opening balance', 'location': location})
     assert r.status_code == 200, r.json
     assert post(client, '/register/open', {'opening': '100'}).status_code == 200
     return p

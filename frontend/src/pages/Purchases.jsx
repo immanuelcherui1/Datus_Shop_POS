@@ -89,9 +89,18 @@ export function Purchases({ notify, initialProducts = [], user }) {
         if (key === "product_id" || key === "purchase_unit") {
           const p = products.find((p) => p.id === Number(next.product_id));
           next.unit_cost =
-            p?.[
-              next.purchase_unit === "pack" ? "cost_per_pack" : "cost_per_unit"
-            ] || "0";
+            key === "purchase_unit" && p
+              ? (
+                  Number(l.unit_cost) *
+                  (value === "pack"
+                    ? Number(p.pack_size)
+                    : 1 / Number(p.pack_size))
+                ).toFixed(6)
+              : p?.[
+                  next.purchase_unit === "pack"
+                    ? "cost_per_pack"
+                    : "cost_per_unit"
+                ] || "0";
         }
         return next;
       }),

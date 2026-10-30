@@ -21,7 +21,7 @@ export function Checkout({ user, notify, onReceipt }) {
   const [products, setProducts] = useState([]),
     [query, setQuery] = useState(""),
     [cart, setCart] = useState([]),
-    [mode, setMode] = useState("retail");
+    [mode, setMode] = useState("wholesale");
   const [quote, setQuote] = useState(null),
     [customer, setCustomer] = useState("Walk-in customer"),
     [payments, setPayments] = useState([
@@ -114,7 +114,9 @@ export function Checkout({ user, notify, onReceipt }) {
       return;
     }
     setCart((items) => {
-      const found = items.find((x) => x.product_id === product.id);
+      const found = items.find(
+        (x) => x.product_id === product.id && x.mode === mode,
+      );
       return found
         ? items.map((x) =>
             x === found
@@ -360,7 +362,7 @@ export function Checkout({ user, notify, onReceipt }) {
             </Empty>
           )}
           {cart.map((item, i) => (
-            <div className="cart-line" key={item.product_id}>
+            <div className="cart-line" key={`${item.product_id}:${item.mode}`}>
               <div className="line-title">
                 <strong>{item.product.name}</strong>
                 <button
@@ -390,7 +392,16 @@ export function Checkout({ user, notify, onReceipt }) {
                   onChange={(e) => update(i, "mode", e.target.value)}
                 >
                   {modes.map(([value, label]) => (
-                    <option key={value} value={value}>
+                    <option
+                      key={value}
+                      value={value}
+                      disabled={cart.some(
+                        (other, index) =>
+                          index !== i &&
+                          other.product_id === item.product_id &&
+                          other.mode === value,
+                      )}
+                    >
                       {label}
                     </option>
                   ))}

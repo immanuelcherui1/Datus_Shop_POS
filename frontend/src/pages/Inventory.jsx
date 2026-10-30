@@ -184,6 +184,19 @@ export function Inventory({ notify }) {
       </form>
       <form className="panel form-grid" onSubmit={adjust}>
         <h3>Authorized stock adjustment</h3>
+        <Field label="Quantity unit">
+          <select name="unit">
+            <option value="unit">Base units</option>
+            <option value="pack">Packs</option>
+          </select>
+        </Field>
+        <Field
+          label="Your current password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
         <Field label="Allocation">
           <select name="location">
             <option value="wholesale">Wholesale</option>
@@ -201,7 +214,7 @@ export function Inventory({ notify }) {
           </select>
         </Field>
         <Field
-          label="Quantity delta · base units"
+          label="Quantity delta"
           name="quantity"
           type="number"
           step="1"
@@ -209,7 +222,7 @@ export function Inventory({ notify }) {
           required
         />
         <Field
-          label="Unit cost for added stock"
+          label="Cost per base unit for added stock"
           name="unit_cost"
           defaultValue="0"
           required

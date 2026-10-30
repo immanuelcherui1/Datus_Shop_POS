@@ -49,6 +49,7 @@ class ProductSchema(Schema):
     wholesale_price = Exact(required=True)
     pack_size = Exact(0, '1', required=True)
     tax_rate = Exact(4, maximum='1', load_default=Decimal('0'))
+    reorder_packs = Exact(0, load_default=None, allow_none=True)
     reorder_level = Exact(0, load_default=Decimal('5'))
     active = fields.Boolean(load_default=True)
 
@@ -105,6 +106,8 @@ class CheckoutSchema(QuoteSchema):
 
 
 class AdjustmentSchema(Schema):
+    password = text(200, required=True, load_only=True)
+    unit = fields.String(load_default='unit', validate=validate.OneOf(['unit','pack']))
     location = fields.String(load_default='wholesale', validate=validate.OneOf(['wholesale', 'retail']))
     product_id = fields.Integer(required=True, strict=True)
     quantity = Exact(0, '-1000000000', required=True)
@@ -159,3 +162,10 @@ class TransferSchema(Schema):
 class CatalogueSchema(Schema):
     kind = fields.String(required=True, validate=validate.OneOf(['category', 'unit']))
     name = text(80, required=True)
+
+
+class UpdateUserSchema(Schema):
+    username = text(80, required=True)
+    password = fields.String(load_default=None, allow_none=True, validate=validate.Length(min=12,max=200))
+    role = fields.String(required=True, validate=validate.OneOf(['owner','manager','cashier','inventory','accountant']))
+    active = fields.Boolean(required=True)

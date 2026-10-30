@@ -22,7 +22,7 @@ from werkzeug.security import generate_password_hash
 from datus.paths import resource_root, data_root
 
 _version_file = resource_root() / 'version.txt'
-VERSION = _version_file.read_text(encoding='utf-8').strip() if _version_file.exists() else '0.3.1'
+VERSION = _version_file.read_text(encoding='utf-8').strip() if _version_file.exists() else '0.3.2'
 
 
 def available_port():

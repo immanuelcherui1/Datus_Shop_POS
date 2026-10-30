@@ -8,7 +8,7 @@ from flask import Blueprint, current_app, g, jsonify, request
 from flask_jwt_extended import create_access_token, set_access_cookies, unset_jwt_cookies
 from sqlalchemy import select, func, case
 from sqlalchemy.exc import IntegrityError
-from werkzeug.exceptions import BadRequest, Conflict, Unauthorized, NotFound
+from werkzeug.exceptions import BadRequest, Conflict, Unauthorized, NotFound, Forbidden
 from werkzeug.security import check_password_hash, generate_password_hash
 from .extensions import db, limiter
 from .models import *
@@ -61,7 +61,10 @@ def mutation(scope):
             key = request.headers.get('Idempotency-Key', '')
             if not 8 <= len(key) <= 100:
                 raise BadRequest('An Idempotency-Key of 8–100 characters is required.')
-            digest = hashlib.sha256(json.dumps(request.get_json(), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+            payload = request.get_json()
+            if scope == 'stock.adjust':
+                payload = {k:v for k,v in payload.items() if k != 'password'}
+            digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
             operation = scope + ':' + request.path
             existing = db.session.scalar(select(Idempotency).where(Idempotency.user_id == g.user.id,
                 Idempotency.scope == operation, Idempotency.key == key))
@@ -151,7 +154,7 @@ def products():
     for product in result.items:
         item = record(product)
         stock = db.session.get(Stock, (product.id, g.user.branch_id))
-        item.update(quantity=str(stock.quantity), inventory_value=str(stock.value), retail_quantity=str(stock.retail_quantity),
+        item.update(reorder_packs=str(service.valuation(product.reorder_level/product.pack_size)), quantity=str(stock.quantity), inventory_value=str(stock.value), retail_quantity=str(stock.retail_quantity),
             wholesale_quantity=str(stock.quantity-stock.retail_quantity), cost_per_unit=str(service.valuation(stock.value/stock.quantity) if stock.quantity else 0),
             cost_per_pack=str(service.valuation(stock.value/stock.quantity*product.pack_size) if stock.quantity else 0))
         items.append(item)
@@ -163,6 +166,7 @@ def products():
 @mutation('product.create')
 def create_product():
     data = body(ProductSchema())
+    normalize_reorder(data)
     remember_options(data)
     product = Product(**data)
     db.session.add(product)
@@ -181,6 +185,7 @@ def update_product(product_id):
         raise NotFound()
     before = record(product)
     data = body(ProductSchema())
+    normalize_reorder(data)
     remember_options(data)
     for key, value in data.items():
         setattr(product, key, value)
@@ -198,12 +203,29 @@ def movements():
     return jsonify({'items': [record(x) for x in result.items], 'total': result.total, 'pages': result.pages})
 
 
+def confirm_adjustment_password(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        data = request.get_json(silent=True) or {}
+        password = data.get('password') if isinstance(data,dict) else None
+        if not isinstance(password,str) or not check_password_hash(g.user.password_hash,password):
+            raise Forbidden('Enter the current signed-in user password to authorize this adjustment.')
+        return fn(*args, **kwargs)
+    return wrapped
+
+
 @api.post('/inventory/adjustments')
 @require('adjust')
+@limiter.limit('10 per minute', key_func=lambda: str(g.user.id))
+@confirm_adjustment_password
 @mutation('stock.adjust')
 def adjust():
     data = body(AdjustmentSchema())
+    data.pop('password')  # Never put reauthentication credentials in audit/history.
     stock = service.lock_stock([data['product_id']])[data['product_id']]
+    product = db.session.scalar(select(Product).where(Product.id == stock.product_id).with_for_update())
+    data['entered_quantity'] = data['quantity']
+    data['quantity'] *= product.pack_size if data['unit'] == 'pack' else 1
     value = service.valuation(data['quantity'] * data['unit_cost']) if data['quantity'] > 0 else -service.consume_value(stock, -data['quantity'], data['location'])
     service.move(stock, data['quantity'], value, 'adjustment', data['reason'], location=data['location'])
     service.audit('stock.adjusted', 'product', stock.product_id, serial(data))
@@ -637,3 +659,39 @@ def integer_filter(name):
         return value
     except (ValueError, TypeError):
         raise BadRequest(f'{name} must be a positive integer.')
+
+
+def normalize_reorder(data):
+    packs = data.pop('reorder_packs', None)
+    if packs is not None:
+        data['reorder_level'] = packs * data['pack_size']
+        if data['reorder_level'] > Decimal('1000000000'):
+            raise BadRequest('Reorder threshold exceeds the supported base-unit quantity.')
+
+
+@api.put('/users/<int:user_id>')
+@require('users')
+@mutation('user.update')
+def update_user(user_id):
+    data = body(UpdateUserSchema())
+    # Serialize owner changes against the branch, preventing simultaneous removal
+    # of the final owners. Keep user rows for historical foreign-key accountability.
+    db.session.scalar(select(Branch).where(Branch.id==g.user.branch_id).with_for_update())
+    user = scoped(db.session.scalar(select(User).where(User.id==user_id).with_for_update()))
+    if user.id == g.user.id and (not data['active'] or data['role'] != 'owner'):
+        raise BadRequest('You cannot remove or demote the owner account currently signed in.')
+    if user.role=='owner' and user.active and (not data['active'] or data['role']!='owner'):
+        owners = db.session.scalar(select(func.count(User.id)).where(User.branch_id==g.user.branch_id,User.role=='owner',User.active.is_(True)))
+        if owners <= 1:
+            raise Conflict('Keep at least one active owner.')
+    username = data['username'].strip()
+    if not username:
+        raise BadRequest('Username cannot be blank.')
+    before = {'username':user.username,'role':user.role,'active':user.active}
+    user.username, user.role, user.active = username, data['role'], data['active']
+    if data['password']:
+        user.password_hash = generate_password_hash(data['password'])
+    user.token_version += 1
+    service.audit('user.updated' if user.active else 'user.removed','user',user.id,
+        {'before':before,'after':{'username':user.username,'role':user.role,'active':user.active},'password_changed':bool(data['password'])})
+    return {'id':user.id,'username':user.username,'role':user.role,'active':user.active}
