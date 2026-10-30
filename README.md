@@ -2,13 +2,13 @@
 
 DATUS is a local-first point of sale and stock management application for a single Windows 11 computer. React provides the counter interface, Flask owns business rules, and PostgreSQL stores the authoritative records. Cash trading continues when the internet is unavailable; cloud backup is a separate, optional process.
 
-**Source update: 0.3.0 (wholesale/retail amendments); last verified installer: 0.2.2 · Windows 11 x64. Release status: initial implementation, not an audited or certified production release.** Read [known limitations](docs/STATUS.md) and complete the acceptance checklist before using real shop data. Live M-Pesa/card integrations and an Android APK are not included. No default passwords, credentials, or real customer data are shipped.
+**Current verified installer: 0.3.0 (wholesale/retail amendments) · Windows 11 x64. Release status: initial implementation, not an audited or certified production release.** Read [known limitations](docs/STATUS.md) and complete the acceptance checklist before using real shop data. Live M-Pesa/card integrations and an Android APK are not included. No default passwords, credentials, or real customer data are shipped.
 
 ## Stock allocation upgrade (0.3.0)
 
 Wholesale and retail are **two allocations of one inventory**, not duplicate inventories. Purchases enter wholesale; authorized transfers allocate quantity and cost to retail without changing business totals. The update adds four selling-unit choices, Cash/M-Pesa reconciliation, supplier editing, draft purchase review and printing, reusable categories/units, receipt accountability, and interactive inventory insights.
 
-**Before upgrading an existing shop:** close its trading sessions in the previous version, create a backup and keep the recovery key, then close the controller. Existing stock is assigned to wholesale; allocate the goods already on retail shelves before retail checkout. Never re-add those goods as opening stock. See [amendment workflows, migration policy and limitations](docs/AMENDMENTS.md). The 0.2.2 download below does not include these amendments; use a verified 0.3.0 build when available.
+**Before upgrading an existing shop:** close its trading sessions in the previous version, create a backup and keep the recovery key, then close the controller. Existing stock is assigned to wholesale; allocate the goods already on retail shelves before retail checkout. Never re-add those goods as opening stock. See [amendment workflows, migration policy and limitations](docs/AMENDMENTS.md). The verified 0.3.0 download below includes these amendments.
 
 ## What is implemented
 
@@ -65,16 +65,16 @@ See [amendment module guide](docs/AMENDMENTS.md), [architecture and schema](docs
 
 ## Windows installer (recommended for the shop computer)
 
-[Download DATUS 0.2.2 for Windows x64](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/40948484361/artifacts/12930786150). GitHub sign-in may be required. This verified artifact contains the installer, SHA-256 checksum, build information and acceptance-test result. It is retained until January 27, 2027; check later successful **Windows installer** workflow runs for newer builds.
+[Download DATUS 0.3.0 for Windows x64](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41023040277/artifacts/12962328293). GitHub sign-in may be required. This verified artifact contains the installer, SHA-256 checksum, build information and acceptance-test result. It is retained until January 28, 2027; check later successful **Windows installer** workflow runs for newer builds.
 
 1. Download and extract the ZIP on the shop computer.
-2. Close the DATUS controller if upgrading, then run `DATUS-Setup-0.2.2-x64.exe` under the Windows account that operates the shop.
+2. If upgrading, close all trading sessions in the previous version, back up, and close the controller. Then run `DATUS-Setup-0.3.0-x64.exe` under the Windows account that operates the shop.
 3. Choose desktop and optional sign-in shortcuts. Python, the interface and private PostgreSQL are bundled; no developer tools are required.
 4. Open **DATUS**. On first launch, enter your shop name, owner username and a password of at least 12 characters. There are no default credentials. Upgrades keep the existing shop.
 5. Keep the controller open while trading. **Open DATUS** opens the browser at the correct local address; the installer chooses its own port, so do not assume it is 8080.
 6. Follow [First trading session](#first-trading-session) below.
 
-Current installers are **unsigned**. Verify the source and compare `Get-FileHash .\DATUS-Setup-0.2.2-x64.exe -Algorithm SHA256` with the supplied `.sha256` file. The installer passed installation, first-run setup, checkout, encrypted backup, restart, separate remote-listener and data-preserving uninstall checks. Live hardware and public Funnel access still require verification on the shop computer.
+Current installers are **unsigned**. Verify the source and compare `Get-FileHash .\DATUS-Setup-0.3.0-x64.exe -Algorithm SHA256` with the supplied `.sha256` file. The installer passed installation, first-run setup, checkout, encrypted backup, restart, separate remote-listener and data-preserving uninstall checks. Live hardware and public Funnel access still require verification on the shop computer.
 
 | Location | Purpose |
 | --- | --- |
@@ -205,13 +205,13 @@ Open **http://127.0.0.1:8080** in the browser. DATUS binds to loopback by defaul
 
 1. Sign in as the owner and create staff accounts.
 2. Add products. Enter retail price per base unit, wholesale price per pack, and pack size. Confirm tax rates and units before trading.
-3. Add a supplier and purchase order. Enter quantities and costs in **base units**.
-4. When goods arrive, post the delivered quantities. Only receiving increases inventory.
-5. Open **Cash register** and enter the physical opening float.
-6. Open **New sale**, select retail or wholesale mode, and search or scan products. Barcode scanners must act as a keyboard and send Enter.
+3. Add a supplier and purchase order. Choose base units or packs and the corresponding unit cost. Save a draft to review, then confirm it. Print / Save PDF does not add stock.
+4. When goods arrive, post actual delivered **base-unit** quantities and costs. Goods enter wholesale. In **Inventory ledger**, allocate stock to retail for shelf sales; transfers leave business totals unchanged.
+5. Open **Cash register** and enter Cash and M-Pesa opening balances separately.
+6. Open **New sale**, choose Retail or Wholesale and Unit or Pack, then search or scan products. Barcode scanners must act as a keyboard and send Enter.
 7. Check the server-calculated total. Enter payments equal to the amount due. For cash, record the amount retained **after giving change**.
 8. Complete the sale and print its receipt or save it as PDF. Use **Sales history** to reprint it later.
-9. Review **Daily reports**, reconcile the inventory ledger, and close the register with counted cash.
+9. Review **Daily reports**, reconcile the inventory ledger, and close the register with actual Cash/M-Pesa balances and Remarks.
 10. Run the encrypted backup and confirm off-device upload when configured.
 
 Example: a carton contains 12 units. Retail is KES 10 per unit, wholesale is KES 110 per carton. Selling two cartons reduces stock by 24 units and charges KES 220 before configured tax. Prices and pack conversion are copied into sale lines, so editing the product later does not alter the receipt.
@@ -219,7 +219,7 @@ Example: a carton contains 12 units. Retail is KES 10 per unit, wholesale is KES
 ## Quantity rules
 
 - Prices and payment amounts retain decimal precision; retail quantities support up to three decimal places.
-- Wholesale sale/return quantities are whole packs. Pack sizes, reorder levels, purchasing, receiving and manual stock adjustments use whole base units.
+- Wholesale quantities and packs in either channel are whole numbers. Pack sizes/reorder levels are whole numbers; purchase orders support whole packs or base units, and goods receiving/adjustments use whole base units.
 - Quantity displays remove padding (`12.000` becomes `12`) without rounding genuine fractional retail stock (`29.500` becomes `29.5`).
 - Historical records are not rewritten. Legacy fractional wholesale returns and purchase balances have special considerations described in [inventory rules](docs/INVENTORY.md).
 
@@ -268,3 +268,7 @@ GitHub Actions runs both database suites against PostgreSQL 17, plus frontend te
 Complete [the security and operational checklist](docs/SECURITY.md). In particular, verify your tax setup, physical receipt printer, opening stock and valuation, real PostgreSQL test suite, backup recovery, staff permissions, and a full day-end cash reconciliation. Use a UPS and keep recovery material off this computer.
 
 Android, multi-device offline synchronization, live Daraja callbacks, fiscal/e-invoicing integration, credit accounts, and full accounting are future modules. The current application is single-business and single-shop by design; it is not a multi-tenant SaaS system.
+
+## 0.3.0 verification
+
+Verified code: [`239496e`](https://github.com/immanuelcherui1/Datus_Shop_POS/commit/239496e2317701fbdef98df2d926307779b8f80c). [Integrity CI](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41023040299) passed: 40 SQLite tests (3 PostgreSQL-only cases skipped), 43 tests with PostgreSQL configured, 7 frontend tests and the production build. [Windows installer acceptance](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41023040277) passed, including stock allocations, M-Pesa reconciliation, supplier edits and draft confirmation under restricted runtime permissions. Legacy data migration preservation/refusal tests use disposable SQLite databases; PostgreSQL schema creation and competing stock allocations are covered by CI. Desktop/mobile browser checks used a separate demonstration database.

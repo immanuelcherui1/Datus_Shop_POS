@@ -4,7 +4,7 @@ The desktop installer packages DATUS, Python, the built React interface, Postgre
 
 ## Operator setup
 
-1. Run `DATUS-Setup-0.2.2-x64.exe` on 64-bit Windows 11 under the Windows account that will run the shop.
+1. Run `DATUS-Setup-0.3.0-x64.exe` on 64-bit Windows 11 under the Windows account that will run the shop.
 2. Choose whether to create a desktop shortcut and whether to open DATUS at sign-in.
 3. Open **DATUS** from the desktop or Start menu.
 4. Enter the business name, owner username and a password of at least 12 characters. There are no default credentials.
@@ -26,7 +26,7 @@ The controller also has **Create encrypted backup** and **Open data and backups 
 
 The configuration and database administrator file contain secrets. Protect the Windows account, keep local-volume encryption enabled, and keep the recovery key separate from off-device backup files. The app uses a restricted database role; only the launcher uses the migration owner to initialize or upgrade the schema.
 
-Close DATUS before running a replacement installer. The installer refuses to update or uninstall while its desktop controller is running. It replaces application files and keeps the business-data folder. Before applying a newer schema, the launcher creates an encrypted backup and aborts the upgrade if backup fails.
+**For the 0.3.0 upgrade, first close all trading sessions in the previous version and take a backup.** Existing stock starts in wholesale; allocate retail shelf stock before retail checkout. See [AMENDMENTS.md](AMENDMENTS.md). Close DATUS before running a replacement installer. The installer refuses to update or uninstall while its desktop controller is running. It replaces application files and keeps the business-data folder. Before applying a newer schema, the launcher creates an encrypted backup and aborts the upgrade if backup fails.
 
 **Uninstall removes the application and shortcuts, not shop data or backups.** Reinstalling under the same Windows account reconnects to the preserved shop. Do not manually remove the business-data folder unless you have intentionally retired the shop and verified recoverable backups.
 
@@ -37,7 +37,7 @@ This is a per-user application, not a Windows service. The optional sign-in shor
 GitHub Actions produces `DATUS-Windows-x64-installer` artifacts for installer-related commits. Download the installer and its `.sha256` file from a successful **Windows installer** run. Version tags publish the same files as GitHub Release assets after the packaged smoke test passes.
 
 ```powershell
-Get-FileHash .\DATUS-Setup-0.2.2-x64.exe -Algorithm SHA256
+Get-FileHash .\DATUS-Setup-0.3.0-x64.exe -Algorithm SHA256
 ```
 
 Compare the result with the accompanying checksum. Current builds are **unsigned** because no publisher code-signing certificate has been configured. Windows may show an unknown-publisher warning. Verify the file's source and checksum; do not turn off Windows security protections. Signing and clean-machine acceptance remain release tasks before broad shop deployment.
@@ -54,7 +54,7 @@ py -3.12 -m venv .venv
 
 The build downloads official PostgreSQL and NSIS archives, verifies pinned SHA-256 digests, builds the frontend, freezes the Python application, checks required resources and compiles the installer. It never bundles `.env`, a business database, backup keys or working test data. Build outputs are ignored by Git and placed in `release/`.
 
-The frozen smoke test runs in a newly created empty directory and exercises owner bootstrap, migrations, actual application authentication, wholesale checkout, reconciliation, encrypted backup and restart without changing existing business data. GitHub's Windows job runs this test before uploading artifacts.
+The frozen smoke test runs in a newly created empty directory and exercises owner bootstrap, migrations, actual application authentication, wholesale/retail checkout, stock allocation, Cash/M-Pesa reconciliation, supplier edits, draft confirmation, encrypted backup and restart without changing existing business data. GitHub's Windows job runs this test before uploading artifacts.
 
 Maintainers must review and update pinned tool URLs/digests when upgrading PostgreSQL or the installer compiler. The PostgreSQL major version is fixed at 17; a future major-version upgrade needs a separate data migration plan.
 

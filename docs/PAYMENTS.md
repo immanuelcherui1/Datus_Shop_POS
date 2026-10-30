@@ -4,7 +4,7 @@
 
 `cash` records physical money retained in the drawer. `external_mobile`, `external_card` and `external_bank` record settlement that an owner or manager has independently verified outside DATUS. Every external record requires a reference, unique within its method. DATUS does not contact a provider, initiate a charge, read card data, or verify a mobile notification in this release.
 
-The labels intentionally say **verified external**. Cashiers cannot post these methods. An external refund similarly requires an independently verified reference; recording it does not move money at the provider.
+The UI labels mobile settlement **M-Pesa · verified** and card/bank settlement **Other**. Cashiers cannot post these methods. An external refund similarly requires an independently verified reference; recording it does not move money at the provider.
 
 Payments must sum exactly to the server total. There is no credit or partial-payment sale. Cash should be entered net of change. Non-cash settlement is excluded from the physical drawer balance.
 
@@ -39,4 +39,6 @@ Partial refunds use cumulative rounding: round the amount due for total returned
 
 ## Register
 
-One open session per branch is enforced by a database partial unique index. Expected cash = opening float + cash sales − cash refunds. Closing records expected, actual, variance and notes; a nonzero variance requires manager/owner adjustment permission and an explanation. Cash-in/out expense handling is not in the first release.
+One open session per branch is enforced by a database partial unique index. Expected cash = opening float + cash sales − cash refunds. M-Pesa uses the same equation with its own opening balance and recorded mobile settlements/refunds. Closing records each expected/actual balance, variance, the authenticated closing user and Remarks; a nonzero variance requires manager/owner adjustment permission and an explanation. Cash-in/out expense handling is not in the first release.
+
+See [AMENDMENTS.md](AMENDMENTS.md) for four-mode pricing, allocation-specific returns and historical reconciliation limits.
