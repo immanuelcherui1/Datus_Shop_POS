@@ -46,7 +46,7 @@ function App() {
     [view, setView] = useState(""),
     [toast, setToast] = useState(""),
     [receipt, setReceipt] = useState(null),
-    [purchaseProducts,setPurchaseProducts] = useState([]);
+    [purchaseProducts, setPurchaseProducts] = useState([]);
   useEffect(() => {
     api("/auth/me")
       .then(setUser)
@@ -75,7 +75,15 @@ function App() {
     permissions.split("|").some((p) => user.permissions.includes(p)),
   );
   const active = view && nav.some(([name]) => name === view) ? view : nav[0][0];
-  const props = { user, notify: setToast, onReceipt: setReceipt, onPurchase: products=>{setPurchaseProducts(products);setView("Purchases")} };
+  const props = {
+    user,
+    notify: setToast,
+    onReceipt: setReceipt,
+    onPurchase: (products) => {
+      setPurchaseProducts(products);
+      setView("Purchases");
+    },
+  };
   return (
     <div className="app">
       <aside className="sidebar">
@@ -95,7 +103,10 @@ function App() {
             <button
               key={label}
               className={active === label ? "selected" : ""}
-              onClick={() => {setPurchaseProducts([]);setView(label)}}
+              onClick={() => {
+                setPurchaseProducts([]);
+                setView(label);
+              }}
             >
               <Icon size={18} />
               {label}
@@ -153,7 +164,9 @@ function App() {
           {active === "New sale" && <Checkout {...props} />}{" "}
           {active === "Products" && <Products {...props} />}{" "}
           {active === "Inventory ledger" && <Inventory {...props} />}{" "}
-          {active === "Purchases" && <Purchases {...props} initialProducts={purchaseProducts} />}{" "}
+          {active === "Purchases" && (
+            <Purchases {...props} initialProducts={purchaseProducts} />
+          )}{" "}
           {active === "Sales history" && <Sales {...props} />}{" "}
           {active === "Cash register" && <Register {...props} />}{" "}
           {active === "Daily reports" && <Reports {...props} />}{" "}

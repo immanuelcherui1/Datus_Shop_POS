@@ -14,7 +14,7 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { api, operation } from "../api";
-import { quantity, cash, localDate, dateTime } from "../lib/format";
+import { unitPrice, quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
 export function Checkout({ user, notify, onReceipt }) {
@@ -39,10 +39,27 @@ export function Checkout({ user, notify, onReceipt }) {
   const [pending, setPending] = useState(() => submit.current.pending());
   const search = useRef();
   const channel = mode.startsWith("wholesale") ? "wholesale" : "retail";
-  const modes = channel === "wholesale" ? [["wholesale", "Wholesale / Pack"], ["wholesale_unit", "Wholesale / Unit"]] : [["retail", "Retail / Unit"], ["retail_pack", "Retail / Pack"]];
-  const outstanding = Math.round(Number(quote?.total || 0)*100) - payments.reduce((n,p)=>n+Math.round(Number(p.amount||0)*100),0);
+  const modes =
+    channel === "wholesale"
+      ? [
+          ["wholesale", "Wholesale / Pack"],
+          ["wholesale_unit", "Wholesale / Unit"],
+        ]
+      : [
+          ["retail", "Retail / Unit"],
+          ["retail_pack", "Retail / Pack"],
+        ];
+  const outstanding =
+    Math.round(Number(quote?.total || 0) * 100) -
+    payments.reduce((n, p) => n + Math.round(Number(p.amount || 0) * 100), 0);
   const available = (p) => p[`${channel}_quantity`];
-  const price = (p) => ({retail:Number(p.retail_price),retail_pack:Number(p.retail_price)*Number(p.pack_size),wholesale:Number(p.wholesale_price),wholesale_unit:Number(p.wholesale_price)/Number(p.pack_size)})[mode];
+  const price = (p) =>
+    ({
+      retail: Number(p.retail_price),
+      retail_pack: Number(p.retail_price) * Number(p.pack_size),
+      wholesale: Number(p.wholesale_price),
+      wholesale_unit: Number(p.wholesale_price) / Number(p.pack_size),
+    })[mode];
   useEffect(() => {
     let active = true;
     api(`/products?q=${encodeURIComponent(query)}&size=100`)
@@ -224,8 +241,19 @@ export function Checkout({ user, notify, onReceipt }) {
     <div className="checkout-grid">
       <section>
         <div className="actions" role="group" aria-label="Transaction type">
-          {["wholesale","retail"].map(c=><button key={c} className={channel===c?"primary":""} disabled={busy || cart.length>0} onClick={()=>setMode(c)}>{c === "wholesale" ? "Wholesale" : "Retail"}</button>)}
-          {cart.length>0 && <small>Complete or clear this sale before changing channel.</small>}
+          {["wholesale", "retail"].map((c) => (
+            <button
+              key={c}
+              className={channel === c ? "primary" : ""}
+              disabled={busy || cart.length > 0}
+              onClick={() => setMode(c)}
+            >
+              {c === "wholesale" ? "Wholesale" : "Retail"}
+            </button>
+          ))}
+          {cart.length > 0 && (
+            <small>Complete or clear this sale before changing channel.</small>
+          )}
         </div>
         <div className="toolbar">
           <div className="search">
@@ -250,7 +278,11 @@ export function Checkout({ user, notify, onReceipt }) {
             value={mode}
             onChange={(e) => setMode(e.target.value)}
           >
-            {modes.map(([value,label])=><option key={value} value={value}>{label}</option>)}
+            {modes.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </div>
         <div className="section-title">
@@ -274,14 +306,12 @@ export function Checkout({ user, notify, onReceipt }) {
                 <small>{p.sku}</small>
                 <h3>{p.name}</h3>
                 <div>
-                  <b>
-                    {cash(
-                      price(p),
-                    )}
-                  </b>
+                  <b>{unitPrice(price(p))}</b>
                   <span
                     className={
-                      Number(available(p)) <= Number(p.reorder_level) ? "low" : ""
+                      Number(available(p)) <= Number(p.reorder_level)
+                        ? "low"
+                        : ""
                     }
                   >
                     {quantity(available(p))} {p.unit} · {channel}
@@ -359,7 +389,11 @@ export function Checkout({ user, notify, onReceipt }) {
                   disabled={busy}
                   onChange={(e) => update(i, "mode", e.target.value)}
                 >
-                  {modes.map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                  {modes.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               </div>
               {user.permissions.includes("discount") && (
@@ -430,15 +464,9 @@ export function Checkout({ user, notify, onReceipt }) {
                 <option value="cash">Cash</option>
                 {user.permissions.includes("external") && (
                   <>
-                    <option value="external_mobile">
-                      M-Pesa · verified
-                    </option>
-                    <option value="external_card">
-                      Other · card
-                    </option>
-                    <option value="external_bank">
-                      Other · bank
-                    </option>
+                    <option value="external_mobile">M-Pesa · verified</option>
+                    <option value="external_card">Other · card</option>
+                    <option value="external_bank">Other · bank</option>
                   </>
                 )}
               </select>

@@ -12,3 +12,11 @@ export function quantity(value) {
   const text = String(value ?? "0");
   return text.includes(".") ? text.replace(/0+$/, "").replace(/\.$/, "") : text;
 }
+
+// Divided prices and purchase costs retain precision; totals still use cash().
+export function unitPrice(value) {
+  return new Intl.NumberFormat("en-KE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  }).format(Number(value || 0));
+}

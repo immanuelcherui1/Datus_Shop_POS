@@ -25,17 +25,24 @@ export function Inventory({ notify }) {
     [busy, setBusy] = useState(false),
     [products, setProducts] = useState([]);
   const submit = useRef(operation());
-  const [transfer,setTransfer] = useState({product_id:"",quantity:"",unit:"unit",reason:"Retail allocation"});
-  const [query,setQuery] = useState("");
+  const [transfer, setTransfer] = useState({
+    product_id: "",
+    quantity: "",
+    unit: "unit",
+    reason: "Retail allocation",
+  });
+  const [query, setQuery] = useState("");
   async function load() {
     const x = await api(`/inventory/movements?page=${page}`);
-    setProducts((await api(`/products?size=100&q=${encodeURIComponent(query)}`)).items);
+    setProducts(
+      (await api(`/products?size=100&q=${encodeURIComponent(query)}`)).items,
+    );
     setItems(x.items);
     setPages(x.pages);
   }
   useEffect(() => {
     load().catch((e) => setError(e.message));
-  }, [page,query]);
+  }, [page, query]);
   async function adjust(e) {
     e.preventDefault();
     const form = e.currentTarget,
@@ -81,18 +88,108 @@ export function Inventory({ notify }) {
           Reconcile ledger
         </button>
       </div>
-      <Field label="Find products"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name or SKU"/></Field>
-      <form className="panel form-grid" onSubmit={async e=>{e.preventDefault();setBusy(true);setError("");try {const r=await submit.current("/inventory/transfers",{...transfer,product_id:Number(transfer.product_id)});await load();notify(`Allocation ${r.reference} posted.`);}catch(e){setError(e.message)}finally{setBusy(false)}}}>
+      <Field label="Find products">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name or SKU"
+        />
+      </Field>
+      <form
+        className="panel form-grid"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            const r = await submit.current("/inventory/transfers", {
+              ...transfer,
+              product_id: Number(transfer.product_id),
+            });
+            await load();
+            notify(`Allocation ${r.reference} posted.`);
+          } catch (e) {
+            setError(e.message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
         <h3>Allocate wholesale stock to retail</h3>
-        <Field label="Product"><select required value={transfer.product_id} onChange={e=>setTransfer({...transfer,product_id:e.target.value})}><option value="">Select product</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} · Wholesale {quantity(p.wholesale_quantity)} {p.unit} ({quantity(Math.floor(Number(p.wholesale_quantity)/Number(p.pack_size)))} full {p.packaging_unit}) · Retail {quantity(p.retail_quantity)}</option>)}</select></Field>
-        <Field label="Transfer quantity" required type="number" min="1" step="1" value={transfer.quantity} onChange={e=>setTransfer({...transfer,quantity:e.target.value})}/>
-        <Field label="Transfer unit"><select value={transfer.unit} onChange={e=>setTransfer({...transfer,unit:e.target.value})}><option value="unit">Base units</option><option value="pack">Packs</option></select></Field>
-        <p>Equivalent base units: {quantity(Number(transfer.quantity)*(transfer.unit==="pack"?Number(products.find(p=>String(p.id)===transfer.product_id)?.pack_size||1):1))}. Total business stock and value remain unchanged.</p>
-        <Field label="Reason" minLength={5} required value={transfer.reason} onChange={e=>setTransfer({...transfer,reason:e.target.value})}/><button className="primary" disabled={busy}>Post allocation</button>
+        <Field label="Product">
+          <select
+            required
+            value={transfer.product_id}
+            onChange={(e) =>
+              setTransfer({ ...transfer, product_id: e.target.value })
+            }
+          >
+            <option value="">Select product</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · Wholesale {quantity(p.wholesale_quantity)} {p.unit} (
+                {quantity(
+                  Math.floor(
+                    Number(p.wholesale_quantity) / Number(p.pack_size),
+                  ),
+                )}{" "}
+                full {p.packaging_unit}) · Retail {quantity(p.retail_quantity)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="Transfer quantity"
+          required
+          type="number"
+          min="1"
+          step="1"
+          value={transfer.quantity}
+          onChange={(e) =>
+            setTransfer({ ...transfer, quantity: e.target.value })
+          }
+        />
+        <Field label="Transfer unit">
+          <select
+            value={transfer.unit}
+            onChange={(e) => setTransfer({ ...transfer, unit: e.target.value })}
+          >
+            <option value="unit">Base units</option>
+            <option value="pack">Packs</option>
+          </select>
+        </Field>
+        <p>
+          Equivalent base units:{" "}
+          {quantity(
+            Number(transfer.quantity) *
+              (transfer.unit === "pack"
+                ? Number(
+                    products.find((p) => String(p.id) === transfer.product_id)
+                      ?.pack_size || 1,
+                  )
+                : 1),
+          )}
+          . Total business stock and value remain unchanged.
+        </p>
+        <Field
+          label="Reason"
+          minLength={5}
+          required
+          value={transfer.reason}
+          onChange={(e) => setTransfer({ ...transfer, reason: e.target.value })}
+        />
+        <button className="primary" disabled={busy}>
+          Post allocation
+        </button>
       </form>
       <form className="panel form-grid" onSubmit={adjust}>
         <h3>Authorized stock adjustment</h3>
-        <Field label="Allocation"><select name="location"><option value="wholesale">Wholesale</option><option value="retail">Retail</option></select></Field>
+        <Field label="Allocation">
+          <select name="location">
+            <option value="wholesale">Wholesale</option>
+            <option value="retail">Retail</option>
+          </select>
+        </Field>
         <Field label="Product">
           <select name="product_id" required>
             <option value="">Select product (first 100)</option>
@@ -140,7 +237,8 @@ export function Inventory({ notify }) {
               <th>Movement</th>
               <th>Date</th>
               <th>Product ID</th>
-              <th>Type / allocation</th><th>User / transfer reference</th>
+              <th>Type / allocation</th>
+              <th>User / transfer reference</th>
               <th>Quantity delta</th>
               <th>Value delta</th>
               <th>Reason</th>
@@ -152,7 +250,12 @@ export function Inventory({ notify }) {
                 <td>#{m.id}</td>
                 <td>{dateTime(m.created_at)}</td>
                 <td>{m.product_id}</td>
-                <td>{m.kind.replaceAll("_", " ")} · {m.location}</td><td>{m.user_id} · {m.transfer_reference || "—"}</td>
+                <td>
+                  {m.kind.replaceAll("_", " ")} · {m.location}
+                </td>
+                <td>
+                  {m.user_id} · {m.transfer_reference || "—"}
+                </td>
                 <td className={Number(m.quantity) > 0 ? "positive" : ""}>
                   {Number(m.quantity) > 0 ? "+" : ""}
                   {quantity(m.quantity)}

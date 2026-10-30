@@ -20,7 +20,7 @@ def upgrade():
         'stock': [sa.Column('retail_quantity', sa.Numeric(18,3), nullable=False, server_default='0'), sa.Column('retail_value', sa.Numeric(18,6), nullable=False, server_default='0')],
         'supplier': [sa.Column(k, sa.String(n), nullable=False, server_default='') for k,n in [('email',160),('address',500),('details',500)]],
         'purchase_line': [sa.Column('description',sa.String(160)),sa.Column('unit',sa.String(30)),sa.Column('conversion',sa.Numeric(18,3),nullable=False,server_default='1'),sa.Column('ordered_quantity',sa.Numeric(18,3)),sa.Column('ordered_unit_cost',sa.Numeric(18,6))],
-        'cash_session': [sa.Column('opening_mpesa',sa.Numeric(18,2),nullable=False,server_default='0'),sa.Column('counted_mpesa',sa.Numeric(18,2)),sa.Column('expected_mpesa',sa.Numeric(18,2)),sa.Column('closed_by_id',sa.Integer())],
+        'cash_session': [sa.Column('opening_mpesa',sa.Numeric(18,2),nullable=True),sa.Column('counted_mpesa',sa.Numeric(18,2)),sa.Column('expected_mpesa',sa.Numeric(18,2)),sa.Column('closed_by_id',sa.Integer())],
         'sale': [sa.Column('transaction_type',sa.String(20)),sa.Column('served_by',sa.String(80))],
         'movement': [sa.Column('location',sa.String(20),nullable=False,server_default='legacy'),sa.Column('transfer_reference',sa.String(40))],
         'cash_movement': [sa.Column('method',sa.String(20),nullable=False,server_default='cash')],

@@ -153,3 +153,27 @@ it("does not add a stale product when a barcode Enter arrives before search resu
     screen.queryByRole("button", { name: "Remove Old result" }),
   ).not.toBeInTheDocument();
 });
+
+it("uses wholesale units and blocks an underallocated split payment", async () => {
+  const item = {id:1,sku:"OIL",name:"Oil",active:true,quantity:"36",wholesale_quantity:"24",retail_quantity:"12",unit:"bottle",pack_size:"12",retail_price:"120",wholesale_price:"1200",category:"Grocery",reorder_level:"2"};
+  const fetcher=vi.spyOn(globalThis,"fetch").mockImplementation(async (url)=>{
+    if(url.includes("/sales/quote")) return {ok:true,json:async()=>({subtotal:"100",tax:"0",total:"100"})};
+    return {ok:true,json:async()=>({items:[item]})};
+  });
+  render(<Checkout user={{id:8,permissions:["external"],currency:"KES"}} notify={vi.fn()} onReceipt={vi.fn()}/>);
+  await screen.findByRole("button",{name:/OIL Oil/});
+  fireEvent.click(screen.getByRole("button",{name:"Wholesale",exact:true}));
+  fireEvent.change(screen.getByLabelText("Default selling mode"),{target:{value:"wholesale_unit"}});
+  fireEvent.click(screen.getByRole("button",{name:/OIL Oil/}));
+  await waitFor(()=>expect(screen.getByRole("button",{name:/Complete sale/})).toBeEnabled());
+  expect(screen.getByRole("button",{name:"Retail",exact:true})).toBeDisabled();
+  expect(JSON.parse(fetcher.mock.calls.find(([url])=>url.includes("/sales/quote"))[1].body).lines[0].mode).toBe("wholesale_unit");
+  fireEvent.click(screen.getByRole("button",{name:"+ Split"}));
+  fireEvent.change(screen.getByLabelText("Payment amount 1"),{target:{value:"40"}});
+  fireEvent.change(screen.getByLabelText("Payment method 2"),{target:{value:"external_mobile"}});
+  fireEvent.change(screen.getByLabelText("Payment amount 2"),{target:{value:"50"}});
+  expect(screen.getByRole("status")).toHaveTextContent("Outstanding balance: 10.00");
+  expect(screen.getByRole("button",{name:/Complete sale/})).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Payment amount 2"),{target:{value:"60"}});
+  expect(screen.getByRole("button",{name:/Complete sale/})).toBeEnabled();
+});

@@ -114,7 +114,7 @@ class CashSession(db.Model):
     counted = db.Column(db.Numeric(18, 2))
     expected = db.Column(db.Numeric(18, 2))
     notes = db.Column(db.String(500))
-    opening_mpesa = db.Column(db.Numeric(18, 2), nullable=False, default=0)
+    opening_mpesa = db.Column(db.Numeric(18, 2), nullable=True, default=0)
     counted_mpesa = db.Column(db.Numeric(18, 2))
     expected_mpesa = db.Column(db.Numeric(18, 2))
     closed_by_id = db.Column(db.ForeignKey('user.id'))

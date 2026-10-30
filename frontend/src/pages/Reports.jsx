@@ -1,4 +1,4 @@
-import {Insights} from "./Insights";
+import { Insights } from "./Insights";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Package,
@@ -48,7 +48,7 @@ export function Reports({ dashboard, user, onPurchase }) {
   }
   return (
     <>
-      <Insights user={user} onPurchase={onPurchase}/>
+      <Insights user={user} onPurchase={onPurchase} />
       {dashboard && (
         <div className="welcome">
           <div>
@@ -118,7 +118,25 @@ export function Reports({ dashboard, user, onPurchase }) {
                 "Current stock · includes out of stock",
               ],
             ].map(([label, value, note]) => (
-              <div className="stat panel" key={label}>
+              <div
+                className="stat panel"
+                key={label}
+                role={label === "Low-stock products" ? "button" : undefined}
+                tabIndex={label === "Low-stock products" ? 0 : undefined}
+                onClick={() => {
+                  if (label === "Low-stock products")
+                    document.querySelector("[data-low-stock]")?.click();
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    label === "Low-stock products" &&
+                    ["Enter", " "].includes(e.key)
+                  ) {
+                    e.preventDefault();
+                    document.querySelector("[data-low-stock]")?.click();
+                  }
+                }}
+              >
                 <span>{label}</span>
                 <h2>{value}</h2>
                 <small>{note}</small>
@@ -135,7 +153,13 @@ export function Reports({ dashboard, user, onPurchase }) {
                 Object.entries(data.payments).map(([method, amount]) => (
                   <div className="payment-summary" key={method}>
                     <div>
-                      <span>{method.replace("external_", "External ")}</span>
+                      <span>
+                        {method === "cash"
+                          ? "Cash"
+                          : method === "external_mobile"
+                            ? "M-Pesa"
+                            : "Other · " + method.replace("external_", "")}
+                      </span>
                       <b>{cash(amount)}</b>
                     </div>
                     <div className="bar">

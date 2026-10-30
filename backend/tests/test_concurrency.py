@@ -30,3 +30,23 @@ def test_parallel_checkout_does_not_oversell(app, client, same_key):
     if same_key:
         assert all(r.status_code == 200 for r in results)
         assert post(client, '/sales', sale_body(), 'same-checkout-key').status_code == 200
+
+
+@pytest.mark.postgres
+def test_allocation_and_wholesale_checkout_compete_for_same_unit(app,client):
+    with app.app_context():
+        if db.engine.dialect.name!='postgresql':
+            pytest.skip('PostgreSQL required for allocation locking.')
+    product=stock(client,'1',location='wholesale')
+    barrier=Barrier(2)
+    def worker(kind):
+        c=app.test_client();c.post('/api/auth/login',json={'username':'owner','password':'test-only-password'})
+        barrier.wait(timeout=10)
+        if kind=='transfer':
+            return post(c,'/inventory/transfers',{'product_id':product['id'],'quantity':'1','unit':'unit','reason':'Last unit allocation'})
+        return post(c,'/sales',{'lines':[{'product_id':product['id'],'quantity':'1','mode':'wholesale_unit'}],
+            'payments':[{'method':'cash','amount':'10.64'}]})
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results=list(pool.map(worker,['transfer','sale']))
+    assert sorted(r.status_code for r in results)==[200,409],[(r.status_code,r.json) for r in results]
+    assert client.get('/api/inventory/reconciliation').json['ok']

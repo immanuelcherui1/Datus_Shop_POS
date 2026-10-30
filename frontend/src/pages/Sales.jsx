@@ -25,15 +25,23 @@ export function Sales({ onReceipt, user, notify }) {
     [returned, setReturned] = useState(null),
     [busy, setBusy] = useState(false);
   const submit = useRef(operation());
-  const [filters,setFilters] = useState({user_id:"",type:"",method:"",start:"",end:""});
+  const [filters, setFilters] = useState({
+    user_id: "",
+    type: "",
+    method: "",
+    start: "",
+    end: "",
+  });
   useEffect(() => {
-    api(`/sales?page=${page}&${new URLSearchParams(Object.entries(filters).filter(([,v])=>v))}`)
+    api(
+      `/sales?page=${page}&${new URLSearchParams(Object.entries(filters).filter(([, v]) => v))}`,
+    )
       .then((x) => {
         setItems(x.items);
         setPages(x.pages);
       })
       .catch((e) => setError(e.message));
-  }, [page,JSON.stringify(filters)]);
+  }, [page, JSON.stringify(filters)]);
   async function detail(id, action) {
     try {
       action(await api(`/sales/${id}`));
@@ -76,10 +84,56 @@ export function Sales({ onReceipt, user, notify }) {
   return (
     <>
       <div className="toolbar">
-        <Field label="User ID"><input value={filters.user_id} type="number" min="1" onChange={e=>{setFilters({...filters,user_id:e.target.value});setPage(1)}}/></Field>
-        <Field label="Transaction type"><select value={filters.type} onChange={e=>{setFilters({...filters,type:e.target.value});setPage(1)}}><option value="">All types</option><option value="wholesale">Wholesale</option><option value="retail">Retail</option></select></Field>
-        <Field label="Payment"><select value={filters.method} onChange={e=>{setFilters({...filters,method:e.target.value});setPage(1)}}><option value="">All methods</option><option value="cash">Cash</option><option value="external_mobile">M-Pesa</option><option value="other">Other</option></select></Field>
-        {["start","end"].map(k=><Field key={k} label={k}><input type="date" value={filters[k]} onChange={e=>{setFilters({...filters,[k]:e.target.value});setPage(1)}}/></Field>)}
+        <Field label="User ID">
+          <input
+            value={filters.user_id}
+            type="number"
+            min="1"
+            onChange={(e) => {
+              setFilters({ ...filters, user_id: e.target.value });
+              setPage(1);
+            }}
+          />
+        </Field>
+        <Field label="Transaction type">
+          <select
+            value={filters.type}
+            onChange={(e) => {
+              setFilters({ ...filters, type: e.target.value });
+              setPage(1);
+            }}
+          >
+            <option value="">All types</option>
+            <option value="wholesale">Wholesale</option>
+            <option value="retail">Retail</option>
+          </select>
+        </Field>
+        <Field label="Payment">
+          <select
+            value={filters.method}
+            onChange={(e) => {
+              setFilters({ ...filters, method: e.target.value });
+              setPage(1);
+            }}
+          >
+            <option value="">All methods</option>
+            <option value="cash">Cash</option>
+            <option value="external_mobile">M-Pesa</option>
+            <option value="other">Other</option>
+          </select>
+        </Field>
+        {["start", "end"].map((k) => (
+          <Field key={k} label={k}>
+            <input
+              type="date"
+              value={filters[k]}
+              onChange={(e) => {
+                setFilters({ ...filters, [k]: e.target.value });
+                setPage(1);
+              }}
+            />
+          </Field>
+        ))}
       </div>
       {error && (
         <p className="error" role="alert">
@@ -105,7 +159,11 @@ export function Sales({ onReceipt, user, notify }) {
                 placeholder="Return quantity"
                 type="number"
                 min="0"
-                step={l.mode === "wholesale" && Number.isInteger(Number(l.quantity)) ? "1" : "0.001"}
+                step={
+                  l.mode === "wholesale" && Number.isInteger(Number(l.quantity))
+                    ? "1"
+                    : "0.001"
+                }
               />
               <select aria-label="Disposition" name={`d${l.id}`}>
                 <option value="restock">Restock</option>
@@ -148,7 +206,8 @@ export function Sales({ onReceipt, user, notify }) {
             <tr>
               <th>Receipt</th>
               <th>Date</th>
-              <th>Customer</th><th>Served by / type</th>
+              <th>Customer</th>
+              <th>Served by / type</th>
               <th>Total</th>
               <th>Payment</th>
               <th />
@@ -161,10 +220,23 @@ export function Sales({ onReceipt, user, notify }) {
                   <strong>{s.number}</strong>
                 </td>
                 <td>{dateTime(s.created_at)}</td>
-                <td>{s.customer}</td><td>{s.served_by} (#{s.user_id})<small>{s.transaction_type}</small></td>
+                <td>{s.customer}</td>
+                <td>
+                  {s.served_by} (#{s.user_id})
+                  <small>{s.transaction_type}</small>
+                </td>
                 <td>{cash(s.total)}</td>
                 <td>
-                  {s.payments?.map(p=><small key={p.id}>{p.method === "cash"?"Cash":p.method === "external_mobile"?"M-Pesa":"Other"}: {cash(p.amount)}</small>)}
+                  {s.payments?.map((p) => (
+                    <small key={p.id}>
+                      {p.method === "cash"
+                        ? "Cash"
+                        : p.method === "external_mobile"
+                          ? "M-Pesa"
+                          : "Other"}
+                      : {cash(p.amount)}
+                    </small>
+                  ))}
                 </td>
                 <td>
                   <div className="actions">

@@ -162,6 +162,8 @@ class Installation:
             exists = db.session.scalar(text("SELECT to_regclass('public.alembic_version')"))
             current = db.session.scalar(text('SELECT version_num FROM alembic_version')) if exists else None
             target = ScriptDirectory(str(self.resources / 'backend' / 'migrations')).get_current_head()
+            if current in ('0001', '0002') and db.session.scalar(text('SELECT count(*) FROM cash_session WHERE closed_at IS NULL')):
+                raise RuntimeError('Close all trading sessions using the previous DATUS version before installing 0.3.0. Your data has not been migrated.')
             db.session.rollback()
             if self.marker.exists() and current != target:
                 self.backup()  # Do not migrate an existing shop unless an encrypted backup succeeds.

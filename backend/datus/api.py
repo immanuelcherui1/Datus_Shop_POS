@@ -6,7 +6,7 @@ from functools import wraps
 from zoneinfo import ZoneInfo
 from flask import Blueprint, current_app, g, jsonify, request
 from flask_jwt_extended import create_access_token, set_access_cookies, unset_jwt_cookies
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import BadRequest, Conflict, Unauthorized, NotFound
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -193,7 +193,7 @@ def update_product(product_id):
 def movements():
     statement = select(Movement).where(Movement.branch_id == g.user.branch_id).order_by(Movement.id.desc())
     if request.args.get('product_id'):
-        statement = statement.where(Movement.product_id == request.args['product_id'])
+        statement = statement.where(Movement.product_id == integer_filter('product_id'))
     result = page(statement)
     return jsonify({'items': [record(x) for x in result.items], 'total': result.total, 'pages': result.pages})
 
@@ -217,19 +217,22 @@ def reconcile():
 
 
 def reconciliation(branch_id):
-    # One aggregate statement provides a consistent snapshot, even during live posting.
+    # Total and allocation aggregates share one SQL snapshot during live posting.
     totals = select(Movement.product_id, func.sum(Movement.quantity).label('quantity'),
-        func.sum(Movement.value).label('value')).where(Movement.branch_id == branch_id).group_by(Movement.product_id).subquery()
-    rows = db.session.execute(select(Stock, totals.c.quantity, totals.c.value).outerjoin(
-        totals, Stock.product_id == totals.c.product_id).where(Stock.branch_id == branch_id)).all()
-    discrepancies = [dict(product_id=s.product_id, cached_quantity=str(s.quantity), ledger_quantity=str(q or 0),
-        cached_value=str(s.value), ledger_value=str(v or 0)) for s, q, v in rows if s.quantity != (q or 0) or s.value != (v or 0)]
-    retail = dict((pid,(q,v)) for pid,q,v in db.session.execute(select(Movement.product_id,func.sum(Movement.quantity),func.sum(Movement.value)).where(Movement.branch_id==branch_id,Movement.location=='retail').group_by(Movement.product_id)))
-    for stock,_,_ in rows:
-        q,v = retail.get(stock.product_id,(Decimal('0'),Decimal('0')))
-        if stock.retail_quantity!=q or stock.retail_value!=v:
-            discrepancies.append(dict(product_id=stock.product_id,allocation='retail',cached_quantity=str(stock.retail_quantity),ledger_quantity=str(q),cached_value=str(stock.retail_value),ledger_value=str(v)))
-    return {'ok': not discrepancies, 'checked': len(rows), 'discrepancies': discrepancies}
+        func.sum(Movement.value).label('value'),
+        func.sum(case((Movement.location=='retail',Movement.quantity),else_=0)).label('retail_quantity'),
+        func.sum(case((Movement.location=='retail',Movement.value),else_=0)).label('retail_value')
+    ).where(Movement.branch_id==branch_id).group_by(Movement.product_id).subquery()
+    rows = db.session.execute(select(Stock,totals.c.quantity,totals.c.value,totals.c.retail_quantity,totals.c.retail_value)
+        .outerjoin(totals,Stock.product_id==totals.c.product_id).where(Stock.branch_id==branch_id)).all()
+    discrepancies=[]
+    for stock,q,v,rq,rv in rows:
+        for allocation,cached_q,cached_v,ledger_q,ledger_v in [('total',stock.quantity,stock.value,q or 0,v or 0),
+                ('retail',stock.retail_quantity,stock.retail_value,rq or 0,rv or 0)]:
+            if cached_q!=ledger_q or cached_v!=ledger_v:
+                discrepancies.append(dict(product_id=stock.product_id,allocation=allocation,cached_quantity=str(cached_q),
+                    ledger_quantity=str(ledger_q),cached_value=str(cached_v),ledger_value=str(ledger_v)))
+    return {'ok':not discrepancies,'checked':len(rows),'discrepancies':discrepancies}
 
 
 @api.get('/suppliers')
@@ -300,7 +303,7 @@ def sales():
     if g.user.role == 'cashier':
         statement = statement.where(Sale.user_id == g.user.id)
     if request.args.get('user_id'):
-        statement = statement.where(Sale.user_id == request.args['user_id'])
+        statement = statement.where(Sale.user_id == integer_filter('user_id'))
     if request.args.get('type'):
         statement = statement.where(Sale.transaction_type == request.args['type'])
     if request.args.get('method'):
@@ -371,7 +374,7 @@ def close_register():
     session.counted_mpesa, session.expected_mpesa = data['counted_mpesa'], expected_mpesa
     session.closed_by_id = g.user.id
     session.closed_at = now()
-    service.audit('register.closed', 'cash_session', session.id, {'variance': str(session.counted - expected)})
+    service.audit('register.closed', 'cash_session', session.id, {'variance': str(session.counted - expected), 'variance_mpesa': str(session.counted_mpesa - expected_mpesa)})
     return session_record(session)
 
 
@@ -436,11 +439,13 @@ def audits():
 
 # Catalogue labels remain compatible with historical products; saved options are reusable.
 def remember_options(data):
-    for kind, name in [('category',data['category']),('unit',data['unit']),('unit',data['packaging_unit'])]:
-        name = name.strip()
+    for kind,key in [('category','category'),('unit','unit'),('unit','packaging_unit')]:
+        name = data[key].strip()
         if not name:
             raise BadRequest('Catalogue labels cannot be blank.')
-        if not db.session.scalar(select(CatalogueOption).where(CatalogueOption.kind==kind,func.lower(CatalogueOption.name)==name.lower())):
+        existing = db.session.scalar(select(CatalogueOption).where(CatalogueOption.kind==kind,func.lower(CatalogueOption.name)==name.lower()))
+        data[key] = existing.name if existing else name
+        if not existing:
             db.session.add(CatalogueOption(kind=kind,name=name))
             db.session.flush()
 
@@ -589,7 +594,8 @@ def insights():
     volume = {pid:q for pid,q,_ in sold}
     rows = db.session.execute(select(Product,Stock).join(Stock).where(Stock.branch_id==g.user.branch_id,Product.active.is_(True))).all()
     items = [dict(record(p),quantity=s.quantity,retail_quantity=s.retail_quantity,wholesale_quantity=s.quantity-s.retail_quantity,
-        inventory_value=s.value,sold_units=volume.get(p.id,Decimal('0'))) for p,s in rows]
+        inventory_value=s.value,cost_per_unit=service.valuation(s.value/s.quantity) if s.quantity else Decimal('0'),
+        cost_per_pack=service.valuation(s.value/s.quantity*p.pack_size) if s.quantity else Decimal('0'),sold_units=volume.get(p.id,Decimal('0'))) for p,s in rows]
     moving = sorted([p for p in items if p['sold_units']>0],key=lambda p:p['sold_units'],reverse=True)
     # Explicit relative classification: top quartile of products with sales is fast-moving.
     fast = moving[:max(1,(len(moving)+3)//4)] if moving else []
@@ -621,3 +627,13 @@ def insights():
         'fast':fast,'slow':slow,'nonmoving':nonmoving,'best_selling':moving[:10],
         'sales_trend':dict(sorted(trends.items())),'stock_trend':dict(sorted(movements.items())),
         'channels':channels,'payments':payments}))
+
+
+def integer_filter(name):
+    try:
+        value = int(request.args[name])
+        if value < 1:
+            raise ValueError()
+        return value
+    except (ValueError, TypeError):
+        raise BadRequest(f'{name} must be a positive integer.')
