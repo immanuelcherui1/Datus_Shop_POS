@@ -6,8 +6,8 @@ from .extensions import db
 from .models import User
 
 PERMISSIONS = {
-    'owner': {'sell', 'catalog', 'purchase', 'adjust', 'report', 'refund', 'discount', 'users', 'external', 'audit', 'register'},
-    'manager': {'sell', 'catalog', 'purchase', 'adjust', 'report', 'refund', 'discount', 'external', 'audit', 'register'},
+    'owner': {'cash_manage', 'sell', 'catalog', 'purchase', 'adjust', 'report', 'refund', 'discount', 'users', 'external', 'audit', 'register'},
+    'manager': {'cash_manage', 'sell', 'catalog', 'purchase', 'adjust', 'report', 'refund', 'discount', 'external', 'audit', 'register'},
     'cashier': {'sell', 'register'},
     'inventory': {'catalog', 'purchase', 'adjust'},
     'accountant': {'report', 'audit'},

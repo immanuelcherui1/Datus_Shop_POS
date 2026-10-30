@@ -57,3 +57,17 @@ def test_upgrade_refuses_open_session_without_modifying_schema(tmp_path):
         assert db.session.execute(text('SELECT version_num FROM alembic_version')).scalar()=='0002'
         assert db.session.execute(text('SELECT quantity,value FROM stock')).one()==(24,120)
         db.session.remove();db.engine.dispose()
+
+
+def test_funds_upgrade_preserves_history_and_marks_old_payments_unknown(tmp_path):
+    app=old_app(tmp_path)
+    with app.app_context():
+        upgrade(revision='0003')
+        db.session.execute(text("INSERT INTO supplier(id,name,phone,email,address,details) VALUES(1,'Legacy supplier','','','','')"))
+        db.session.execute(text("INSERT INTO purchase(id,supplier_id,branch_id,user_id,created_at,status) VALUES(1,1,1,1,'2026-10-01','received')"))
+        db.session.execute(text("INSERT INTO cash_movement(id,session_id,method,amount,reason,user_id,created_at) VALUES(1,1,'cash',10,'Old cash entry',1,'2026-10-01')"))
+        db.session.commit();upgrade()
+        assert not db.session.execute(text('SELECT payments_tracked FROM purchase')).scalar()
+        assert db.session.execute(text('SELECT amount,kind,purchase_id,reverses_id FROM cash_movement')).one()==(10,'settlement',None,None)
+        with pytest.raises(Exception):db.session.execute(text("UPDATE cash_movement SET amount=20"))
+        db.session.rollback();db.session.remove();db.engine.dispose()

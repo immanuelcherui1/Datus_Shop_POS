@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
+import { FundsForm } from "../components/FundsForm";
 import { api, operation } from "../api";
 import { cash, dateTime } from "../lib/format";
 import { Field, Pager } from "../components/ui";
-export function Register({ notify }) {
+export function Register({ notify, user }) {
   const [session, setSession] = useState(undefined),
     [history, setHistory] = useState([]),
     [page, setPage] = useState(1),
@@ -11,15 +12,22 @@ export function Register({ notify }) {
     [busy, setBusy] = useState(false),
     [counts, setCounts] = useState({ counted: "", counted_mpesa: "" });
   const submit = useRef(operation());
+  const [movements, setMovements] = useState([]),
+    [reversal, setReversal] = useState(null),
+    [moneyPage, setMoneyPage] = useState(1),
+    [moneyPages, setMoneyPages] = useState(1);
   async function load() {
     setSession(await api("/register"));
     const r = await api(`/register/history?page=${page}`);
     setHistory(r.items);
     setPages(r.pages);
+    const m = await api(`/register/movements?page=${moneyPage}`);
+    setMovements(m.items);
+    setMoneyPages(m.pages);
   }
   useEffect(() => {
     load().catch((e) => setError(e.message));
-  }, [page]);
+  }, [page, moneyPage]);
   async function save(e) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.currentTarget));
@@ -63,7 +71,7 @@ export function Register({ notify }) {
                     <>
                       <p>Opening: {cash(session[`opening${suffix}`])}</p>
                       <p>
-                        Net receipts / refunds:{" "}
+                        Net recorded movements:{" "}
                         {cash(session[`transactions${suffix}`])}
                       </p>
                       <p>
@@ -118,7 +126,7 @@ export function Register({ notify }) {
                 <p>
                   Any variance requires an authorized manager and an
                   explanation. M-Pesa balance tracks recorded shop settlements
-                  and refunds only.
+                  refunds and recorded money movements.
                 </p>
               </>
             )}
@@ -127,6 +135,74 @@ export function Register({ notify }) {
             </button>
           </form>
         )}
+      </section>
+      {session && user?.permissions.includes("cash_manage") && (
+        <FundsForm
+          key={reversal?.id || "manual"}
+          user={user}
+          reversal={reversal}
+          onCancel={reversal ? () => setReversal(null) : undefined}
+          onDone={async () => {
+            setReversal(null);
+            await load();
+            notify("Funds entry posted.");
+          }}
+        />
+      )}
+      <section className="panel table-wrap">
+        <h2>Money movement history</h2>
+        <p>
+          Amounts are signed: positive adds funds; negative pays funds out. Bank
+          payments are outside the Cash/M-Pesa register balances.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Entry / session</th>
+              <th>Type / source</th>
+              <th>Amount</th>
+              <th>Reason / reference</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {movements.map((m) => (
+              <tr key={m.id}>
+                <td>
+                  #{m.id} · Session {m.session_id}
+                  <small>{dateTime(m.created_at)}</small>
+                </td>
+                <td>
+                  {m.kind} · {m.method}
+                  {m.purchase_id && <small>PO-{m.purchase_id}</small>}
+                </td>
+                <td>{cash(m.amount)}</td>
+                <td>
+                  {m.reason}
+                  <small>{m.reference}</small>
+                </td>
+                <td>
+                  {m.reversed
+                    ? "Reversed"
+                    : m.reverses_id
+                      ? `Reverses #${m.reverses_id}`
+                      : ["cash_in", "cash_out", "purchase_payment"].includes(
+                          m.kind,
+                        ) &&
+                        user?.permissions.includes("cash_manage") && (
+                          <button
+                            disabled={!session}
+                            onClick={() => setReversal(m)}
+                          >
+                            Reverse #{m.id}
+                          </button>
+                        )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <Pager page={moneyPage} setPage={setMoneyPage} pages={moneyPages} />
       </section>
       <section className="panel table-wrap">
         <h2>Session history</h2>

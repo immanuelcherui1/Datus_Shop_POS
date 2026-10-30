@@ -68,6 +68,7 @@ class PurchaseSchema(Schema):
 
 
 class ReceiveLineSchema(Schema):
+    unit = fields.String(load_default="unit", validate=validate.OneOf(["unit","pack"]))
     unit_cost = Exact(6, load_default=None, allow_none=True)
     line_id = fields.Integer(required=True, strict=True)
     quantity = Exact(0, '1', required=True)
@@ -153,6 +154,7 @@ class ReturnSchema(Schema):
 
 
 class TransferSchema(Schema):
+    source = fields.String(load_default="wholesale", validate=validate.OneOf(["wholesale","retail"]))
     product_id = fields.Integer(required=True, strict=True)
     quantity = Exact(0, '1', required=True)
     unit = fields.String(load_default='unit', validate=validate.OneOf(['unit', 'pack']))
@@ -169,3 +171,23 @@ class UpdateUserSchema(Schema):
     password = fields.String(load_default=None, allow_none=True, validate=validate.Length(min=12,max=200))
     role = fields.String(required=True, validate=validate.OneOf(['owner','manager','cashier','inventory','accountant']))
     active = fields.Boolean(required=True)
+
+
+class FundsSchema(Schema):
+    method = fields.String(required=True, validate=validate.OneOf(['cash','external_mobile','external_bank']))
+    amount = Exact(minimum='0.01', required=True)
+    reason = fields.String(required=True, validate=validate.Length(min=5,max=500))
+    reference = text(120, load_default=None, allow_none=True)
+
+
+class CashEntrySchema(FundsSchema):
+    kind = fields.String(required=True, validate=validate.OneOf(['cash_in','cash_out']))
+    @validates_schema
+    def tracked_method(self,data,**kwargs):
+        if data['method']=='external_bank':
+            raise ValidationError('Manual register movements must use Cash or M-Pesa.')
+
+
+class ReversalSchema(Schema):
+    reason = fields.String(required=True, validate=validate.Length(min=5,max=500))
+    reference = text(120, load_default=None, allow_none=True)

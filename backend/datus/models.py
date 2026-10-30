@@ -73,6 +73,7 @@ class CatalogueOption(db.Model):
 
 
 class Purchase(db.Model):
+    payments_tracked = db.Column(db.Boolean, nullable=False, default=True, server_default=db.false())
     id = db.Column(db.Integer, primary_key=True)
     supplier_id = db.Column(db.ForeignKey('supplier.id'), nullable=False)
     branch_id = db.Column(db.ForeignKey('branch.id'), nullable=False)
@@ -83,6 +84,8 @@ class Purchase(db.Model):
 
 
 class PurchaseLine(db.Model):
+    pack_size_snapshot = db.Column(db.Numeric(18,3))
+    purchase_unit = db.Column(db.String(10))
     id = db.Column(db.Integer, primary_key=True)
     purchase_id = db.Column(db.ForeignKey('purchase.id'), nullable=False)
     product_id = db.Column(db.ForeignKey('product.id'), nullable=False)
@@ -231,6 +234,10 @@ class Movement(db.Model):
 
 
 class CashMovement(db.Model):
+    kind = db.Column(db.String(30), nullable=False, default='settlement', server_default='settlement')
+    purchase_id = db.Column(db.ForeignKey('purchase.id'))
+    reverses_id = db.Column(db.ForeignKey('cash_movement.id'), unique=True)
+    reference = db.Column(db.String(120))
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.ForeignKey('cash_session.id'), nullable=False)
     method = db.Column(db.String(20), nullable=False, default='cash')
@@ -240,7 +247,7 @@ class CashMovement(db.Model):
     reason = db.Column(db.String(500), nullable=False)
     user_id = db.Column(db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=now)
-    __table_args__ = (CheckConstraint('amount != 0'),)
+    __table_args__ = (CheckConstraint('amount != 0'), UniqueConstraint('method','reference',name='unique_cash_movement_reference'))
 
 
 class Audit(db.Model):

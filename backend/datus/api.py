@@ -146,6 +146,13 @@ def products():
     if query:
         statement = statement.where(db.or_(Product.name.icontains(query, autoescape=True),
             Product.sku.icontains(query, autoescape=True), Product.barcode == query))
+    if request.args.get('ids'):
+        try:
+            ids=[int(x) for x in request.args['ids'].split(',')]
+            if len(ids)>100 or any(x<1 for x in ids): raise ValueError()
+        except ValueError:
+            raise BadRequest('ids must be up to 100 positive product IDs.')
+        statement=statement.where(Product.id.in_(ids))
     if request.args.get('low') == '1':
         statement = statement.where(Product.active.is_(True), Stock.quantity <= Product.reorder_level)
     ordering = (Stock.quantity > 0, Stock.quantity > Product.reorder_level, Stock.quantity, Product.name) if request.args.get('sort') == 'stock' else (Product.name,)
@@ -154,9 +161,9 @@ def products():
     for product in result.items:
         item = record(product)
         stock = db.session.get(Stock, (product.id, g.user.branch_id))
-        item.update(reorder_packs=str(service.valuation(product.reorder_level/product.pack_size)), quantity=str(stock.quantity), inventory_value=str(stock.value), retail_quantity=str(stock.retail_quantity),
-            wholesale_quantity=str(stock.quantity-stock.retail_quantity), cost_per_unit=str(service.valuation(stock.value/stock.quantity) if stock.quantity else 0),
-            cost_per_pack=str(service.valuation(stock.value/stock.quantity*product.pack_size) if stock.quantity else 0))
+        item.update(unit_locked=bool(db.session.scalar(select(Movement.id).where(Movement.product_id==product.id).limit(1)) or db.session.scalar(select(PurchaseLine.id).where(PurchaseLine.product_id==product.id).limit(1))), reorder_packs=str(service.valuation(product.reorder_level/product.pack_size)), quantity=str(stock.quantity), inventory_value=str(stock.value), retail_quantity=str(stock.retail_quantity),
+            wholesale_quantity=str(stock.quantity-stock.retail_quantity), cost_per_unit=str(service.replenishment_cost(stock)),
+            cost_per_pack=str(service.replenishment_cost(stock,product.pack_size)))
         items.append(item)
     return jsonify({'items': items, 'total': result.total, 'pages': result.pages})
 
@@ -180,11 +187,17 @@ def create_product():
 @require('catalog')
 @mutation('product.update')
 def update_product(product_id):
+    if not db.session.get(Stock,(product_id,g.user.branch_id)):
+        raise NotFound()
+    service.lock_stock([product_id])
     product = db.session.scalar(select(Product).where(Product.id == product_id).with_for_update())
     if not product or not db.session.get(Stock, (product_id, g.user.branch_id)):
         raise NotFound()
     before = record(product)
     data = body(ProductSchema())
+    used = db.session.scalar(select(Movement.id).where(Movement.product_id==product.id).limit(1)) or db.session.scalar(select(PurchaseLine.id).where(PurchaseLine.product_id==product.id).limit(1))
+    if used and (data['unit'].strip()!=product.unit or data['pack_size']!=product.pack_size):
+        raise Conflict('Base unit and pack size are fixed once stock or orders exist. Create a new SKU for a different unit or package size.')
     normalize_reorder(data)
     remember_options(data)
     for key, value in data.items():
@@ -531,11 +544,13 @@ def update_supplier(supplier_id):
 
 
 def purchase_record(purchase):
-    return dict(record(purchase), lines=[record(l) for l in purchase.lines],
+    return dict(record(purchase), lines=[dict(record(l),line_total=str(service.purchase_line_total(l))) for l in purchase.lines],
+        **serial(service.purchase_balances(purchase)),
+        payments=[record(x) for x in db.session.scalars(select(CashMovement).where(CashMovement.purchase_id==purchase.id).order_by(CashMovement.id))],
         supplier=record(db.session.get(Supplier,purchase.supplier_id)),
         prepared_by=db.session.get(User,purchase.user_id).username,
         business_name=current_app.config['BUSINESS_NAME'], currency=current_app.config['CURRENCY'],
-        total=str(service.money(sum((l.quantity*l.unit_cost for l in purchase.lines),Decimal('0')))))
+        total=str(sum((service.purchase_line_total(l) for l in purchase.lines),Decimal('0'))))
 
 
 def save_purchase(purchase, data):
@@ -550,7 +565,9 @@ def save_purchase(purchase, data):
         if not p.active:
             raise BadRequest('Inactive products cannot be ordered.')
         conversion = p.pack_size if values['purchase_unit']=='pack' else Decimal('1')
-        purchase.lines.append(PurchaseLine(product_id=p.id, quantity=values['quantity']*conversion,
+        if values['quantity']*conversion > Decimal('1000000000') or values['quantity']*values['unit_cost'] > Decimal('999999999999'):
+            raise BadRequest('Converted purchase quantity or value is too large.')
+        purchase.lines.append(PurchaseLine(pack_size_snapshot=p.pack_size,purchase_unit=values["purchase_unit"],product_id=p.id, quantity=values['quantity']*conversion,
             unit_cost=service.valuation(values['unit_cost']/conversion), description=p.name,
             unit=p.packaging_unit if values['purchase_unit']=='pack' else p.unit,
             conversion=conversion, ordered_quantity=values['quantity'], ordered_unit_cost=values['unit_cost']))
@@ -618,8 +635,8 @@ def insights():
     volume = {pid:q for pid,q,_ in sold}
     rows = db.session.execute(select(Product,Stock).join(Stock).where(Stock.branch_id==g.user.branch_id,Product.active.is_(True))).all()
     items = [dict(record(p),quantity=s.quantity,retail_quantity=s.retail_quantity,wholesale_quantity=s.quantity-s.retail_quantity,
-        inventory_value=s.value,cost_per_unit=service.valuation(s.value/s.quantity) if s.quantity else Decimal('0'),
-        cost_per_pack=service.valuation(s.value/s.quantity*p.pack_size) if s.quantity else Decimal('0'),sold_units=volume.get(p.id,Decimal('0'))) for p,s in rows]
+        inventory_value=s.value,cost_per_unit=service.replenishment_cost(s),
+        cost_per_pack=service.replenishment_cost(s,p.pack_size),sold_units=volume.get(p.id,Decimal('0'))) for p,s in rows]
     moving = sorted([p for p in items if p['sold_units']>0],key=lambda p:p['sold_units'],reverse=True)
     # Explicit relative classification: top quartile of products with sales is fast-moving.
     fast = moving[:max(1,(len(moving)+3)//4)] if moving else []
@@ -697,3 +714,36 @@ def update_user(user_id):
     service.audit('user.updated' if user.active else 'user.removed','user',user.id,
         {'before':before,'after':{'username':user.username,'role':user.role,'active':user.active},'password_changed':bool(data['password'])})
     return {'id':user.id,'username':user.username,'role':user.role,'active':user.active}
+
+
+@api.post('/purchases/<int:purchase_id>/payments')
+@require('cash_manage')
+@mutation('purchase.payment')
+def pay_supplier(purchase_id):
+    return record(service.post_funds(body(FundsSchema()),purchase_id))
+
+
+@api.get('/register/movements')
+@require('register')
+def funds_history():
+    statement = select(CashMovement).join(CashSession).where(CashSession.branch_id==g.user.branch_id)
+    if request.args.get('session_id'):
+        statement = statement.where(CashMovement.session_id==integer_filter('session_id'))
+    result = page(statement.order_by(CashMovement.id.desc()))
+    reversed_ids = set(db.session.scalars(select(CashMovement.reverses_id).join(CashSession).where(
+        CashSession.branch_id==g.user.branch_id,CashMovement.reverses_id.is_not(None))))
+    return jsonify({'items':[dict(record(x),reversed=x.id in reversed_ids) for x in result.items], 'pages':result.pages,'total':result.total})
+
+
+@api.post('/register/movements')
+@require('cash_manage')
+@mutation('funds.post')
+def post_funds():
+    return record(service.post_funds(body(CashEntrySchema())))
+
+
+@api.post('/register/movements/<int:entry_id>/reversal')
+@require('cash_manage')
+@mutation('funds.reverse')
+def reverse_funds(entry_id):
+    return record(service.reverse_funds(entry_id,body(ReversalSchema())))

@@ -24,6 +24,12 @@ The supplied DATUS logo and icon now appear on sign-in, navigation, documents, b
 
 See [shop workflow details and API notes](docs/SHOP-WORKFLOWS.md). The verified 0.3.2 installer below includes all of these changes.
 
+## Workflow integrity update (0.4.0 source)
+
+The backend now preserves exact pack purchase totals and partial receipt valuation, retains a replenishment cost after sell-out, and locks used product units/conversions. Stock can move in both directions between wholesale and retail. Receiving accepts packs or base units using saved order conversions. Owners/managers can record supplier payments, till/M-Pesa money movements and compensating reversals with balance checks and retry recovery. Historical supplier payment status is explicitly unknown.
+
+See [workflow rules, API and regression coverage](docs/WORKFLOW-INTEGRITY.md). The 0.3.2 verified download below predates these changes; the 0.4.0 build is undergoing verification.
+
 ## What is implemented
 
 - Password authentication, HttpOnly JWT cookies, CSRF protection, login throttling, and backend role enforcement.

@@ -53,6 +53,8 @@ def move(stock, quantity, value, kind, reason, location='wholesale', **links):
     available, worth = pool(stock, location)
     if available + quantity < 0 or valuation(worth + value) < 0:
         raise Conflict(f'Insufficient {location} stock or inventory value.')
+    if stock.quantity+quantity > Decimal('1000000000000') or stock.value+value > Decimal('999999999999'):
+        raise BadRequest('Inventory quantity or value exceeds the supported balance.')
     stock.quantity += quantity
     stock.value = valuation(stock.value + value)
     if location == 'retail':
@@ -74,12 +76,16 @@ def transfer(data):
     stock = lock_stock([data['product_id']])[data['product_id']]
     product = db.session.scalar(select(Product).where(Product.id == stock.product_id).with_for_update())
     quantity = data['quantity'] * (product.pack_size if data['unit'] == 'pack' else 1)
-    cost = consume_value(stock, quantity)
+    source = data['source']
+    target = 'retail' if source == 'wholesale' else 'wholesale'
+    if quantity > Decimal('1000000000'):
+        raise BadRequest('Converted quantity is too large.')
+    cost = consume_value(stock, quantity, source)
     reference = 'TR-' + uuid4().hex[:16].upper()
     # Both ledger legs and caches commit together under the same stock-row lock.
-    move(stock, -quantity, -cost, 'transfer_out', data['reason'], transfer_reference=reference)
-    move(stock, quantity, cost, 'transfer_in', data['reason'], location='retail', transfer_reference=reference)
-    audit('stock.transferred', 'product', product.id, {'reference':reference,'quantity':str(quantity)})
+    move(stock, -quantity, -cost, 'transfer_out', data['reason'], location=source, transfer_reference=reference)
+    move(stock, quantity, cost, 'transfer_in', data['reason'], location=target, transfer_reference=reference)
+    audit('stock.transferred', 'product', product.id, {'reference':reference,'quantity':str(quantity),'source':source,'target':target})
     return {'reference':reference,'quantity':quantity,'wholesale_quantity':pool(stock,'wholesale')[0], 'retail_quantity':stock.retail_quantity}
 
 
@@ -97,7 +103,7 @@ def quote(data):
     result = []
     for item in data['lines']:
         product = db.session.get(Product, item['product_id'])
-        if not product or not product.active:
+        if not product or not product.active or not db.session.get(Stock, (product.id, g.user.branch_id)):
             raise BadRequest('Product is missing or inactive.')
         conversion = product.pack_size if item['mode'] in ('wholesale', 'retail_pack') else Decimal('1')
         price = {'wholesale': product.wholesale_price, 'wholesale_unit': valuation(product.wholesale_price / product.pack_size),
@@ -169,6 +175,10 @@ def checkout(data):
         if values['method'] != 'cash':
             # Manual settlement evidence is deliberately distinct from an integrated provider callback.
             allowed('external')
+            if values['reference']:
+                values['reference'] = values['reference'].strip()
+                if db.session.scalar(select(CashMovement.id).where(CashMovement.method==values['method'],CashMovement.reference==values['reference']).limit(1)):
+                    raise Conflict('This external reference is already recorded as a funds movement.')
             if not values['reference']:
                 raise BadRequest('An independently verified external settlement reference is required.')
         elif values['reference']:
@@ -201,10 +211,28 @@ def receive(purchase_id, data):
     db.session.flush()
     for item in data['lines']:
         line = lines[item['line_id']]
+        entered = item['quantity']
+        conversion = Decimal(1)
+        if item['unit']=='pack':
+            conversion = line.pack_size_snapshot or (line.conversion if line.conversion>1 else None)
+            if conversion is None:
+                raise BadRequest('This historical order has no pack-size snapshot; receive base units.')
+        item['quantity'] = entered * conversion
         if line.received + item['quantity'] > line.quantity:
             raise Conflict('Received quantity exceeds the outstanding order quantity.')
+        before = line.received
         line.received += item['quantity']
-        move(stocks[line.product_id], item['quantity'], valuation(item['quantity'] * (item['unit_cost'] if item.get('unit_cost') is not None else line.unit_cost)),
+        if item.get('unit_cost') is not None:
+            value = valuation(entered * item['unit_cost'])
+        else:
+            # Use original pack price, never the rounded display base-unit cost.
+            # Cumulative allocation preserves every micro-unit across partial receipts.
+            exact_cost = (line.ordered_unit_cost / line.conversion
+                          if line.ordered_unit_cost is not None else line.unit_cost)
+            value = valuation(line.received * exact_cost) - valuation(before * exact_cost)
+        if value > Decimal('999999999999'):
+            raise BadRequest('Receipt inventory value is too large.')
+        move(stocks[line.product_id], item['quantity'], value,
              'purchase_receipt', f'Purchase {purchase.id}', receipt_id=receipt.id)
     purchase.status = 'received' if all(line.received == line.quantity for line in lines.values()) else 'partial'
     audit('purchase.received', 'receipt', receipt.id)
@@ -267,7 +295,100 @@ def post_return(sale_id, data):
         db.session.add(row)
         db.session.flush()
         if payment.method in ('cash', 'external_mobile'):
+            if funds_balance(register,payment.method) < row.amount:
+                raise Conflict('Insufficient recorded funds for this refund. Record actual funding first.')
             db.session.add(CashMovement(session_id=register.id, refund_id=row.id, method=payment.method, amount=-row.amount,
                 reason=data['reason'], user_id=g.user.id))
     audit('sale.returned', 'return', returned.id, {'sale_id': sale.id})
     return returned
+
+
+def replenishment_cost(stock, conversion=Decimal(1)):
+    """Current average while stocked; last actual receipt/opening cost after sell-out."""
+    if stock.quantity:
+        return valuation(stock.value / stock.quantity * conversion)
+    previous = db.session.scalar(select(Movement).where(
+        Movement.product_id==stock.product_id, Movement.branch_id==stock.branch_id,
+        Movement.quantity>0, Movement.kind.in_(['purchase_receipt','adjustment']))
+        .order_by(Movement.id.desc()).limit(1))
+    return valuation(previous.value / previous.quantity * conversion) if previous else ZERO
+
+
+def purchase_line_total(line):
+    quantity = line.ordered_quantity if line.ordered_quantity is not None else line.quantity
+    cost = line.ordered_unit_cost if line.ordered_unit_cost is not None else line.unit_cost
+    return money(quantity * cost)
+
+
+def purchase_balances(purchase):
+    received = db.session.scalar(select(func.coalesce(func.sum(Movement.value),0))
+        .join(Receipt,Movement.receipt_id==Receipt.id).where(Receipt.purchase_id==purchase.id))
+    paid = -db.session.scalar(select(func.coalesce(func.sum(CashMovement.amount),0))
+        .where(CashMovement.purchase_id==purchase.id))
+    received, paid = money(received), money(paid)
+    return dict(received_value=received, paid=paid, outstanding=received-paid)
+
+
+def funds_balance(session, method):
+    opening = session.opening if method=='cash' else session.opening_mpesa
+    if opening is None:
+        raise Conflict('Close the legacy register session before posting funds.')
+    return opening + db.session.scalar(select(func.coalesce(func.sum(CashMovement.amount),0))
+        .where(CashMovement.session_id==session.id,CashMovement.method==method))
+
+
+def validate_funds(session, method, amount, reference):
+    if method!='cash' and not (reference and reference.strip()):
+        raise BadRequest('Enter an independently verified external transaction reference.')
+    if reference and (db.session.scalar(select(Payment.id).where(Payment.method==method,Payment.reference==reference).limit(1)) or db.session.scalar(select(Refund.id).where(Refund.reference==reference).limit(1))):
+        raise Conflict('This reference is already recorded as a sale payment or refund.')
+    if method=='cash' and reference:
+        raise BadRequest('Cash does not use an external transaction reference.')
+    if method in ('cash','external_mobile') and amount<0 and funds_balance(session,method)+amount<0:
+        raise Conflict('Insufficient recorded funds. Record an actual cash-in/top-up first.')
+
+
+def post_funds(data, purchase_id=None):
+    # Consistent lock order: register, then purchase. Closing and outgoing payments serialize.
+    session = open_register()
+    purchase = None
+    if purchase_id is not None:
+        purchase = scoped(db.session.scalar(select(Purchase).where(Purchase.id==purchase_id).with_for_update()))
+        if not purchase.payments_tracked:
+            raise Conflict('Historical purchase payment status is unknown; do not repay it here.')
+        if purchase.status not in ('partial','received'):
+            raise Conflict('Receive goods before recording a supplier payment.')
+        if data['amount'] > purchase_balances(purchase)['outstanding']:
+            raise Conflict('Payment exceeds the unpaid value of goods received.')
+    kind = 'purchase_payment' if purchase else data['kind']
+    amount = data['amount'] if kind=='cash_in' else -data['amount']
+    reference = data['reference'].strip() if data['reference'] else None
+    validate_funds(session,data['method'],amount,reference)
+    entry = CashMovement(session_id=session.id,method=data['method'],amount=amount,
+        reason=data['reason'],user_id=g.user.id,kind=kind,reference=reference,purchase_id=purchase_id)
+    db.session.add(entry); db.session.flush()
+    audit('funds.posted','cash_movement',entry.id,{'kind':kind,'purchase_id':purchase_id})
+    return entry
+
+
+def reverse_funds(entry_id, data):
+    session = open_register()
+    entry = db.session.scalar(select(CashMovement).join(CashSession).where(
+        CashMovement.id==entry_id,CashSession.branch_id==g.user.branch_id))
+    if not entry:
+        from werkzeug.exceptions import NotFound
+        raise NotFound()
+    if entry.kind not in ('cash_in','cash_out','purchase_payment'):
+        raise BadRequest('Use the sales return workflow for sale payments and refunds.')
+    if entry.purchase_id:
+        db.session.scalar(select(Purchase).where(Purchase.id==entry.purchase_id).with_for_update())
+    if db.session.scalar(select(CashMovement.id).where(CashMovement.reverses_id==entry.id)):
+        raise Conflict('This movement is already reversed.')
+    reference = data['reference'].strip() if data['reference'] else None
+    validate_funds(session,entry.method,-entry.amount,reference)
+    reversal = CashMovement(session_id=session.id,method=entry.method,amount=-entry.amount,
+        reason=data['reason'],user_id=g.user.id,kind='reversal',reference=reference,
+        purchase_id=entry.purchase_id,reverses_id=entry.id)
+    db.session.add(reversal); db.session.flush()
+    audit('funds.reversed','cash_movement',reversal.id,{'original_id':entry.id})
+    return reversal

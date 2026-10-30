@@ -17,7 +17,7 @@ import { api, operation } from "../api";
 import { unitPrice, quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
-export function Checkout({ user, notify, onReceipt }) {
+export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
   const [products, setProducts] = useState([]),
     [query, setQuery] = useState(""),
     [cart, setCart] = useState([]),
@@ -33,6 +33,12 @@ export function Checkout({ user, notify, onReceipt }) {
   const [drafts, setDrafts] = useState(() =>
     JSON.parse(sessionStorage.getItem(`datus-drafts-${user.id}`) || "[]"),
   );
+  const [register, setRegister] = useState(undefined);
+  useEffect(() => {
+    api("/register")
+      .then(setRegister)
+      .catch((e) => setError(e.message));
+  }, []);
   const submit = useRef(null);
   if (!submit.current)
     submit.current = operation(`datus-pending-checkout-${user.id}`);
@@ -216,7 +222,7 @@ export function Checkout({ user, notify, onReceipt }) {
     if (cart.length)
       return setError("Suspend or clear the current cart first.");
     const draft = drafts[index];
-    setMode(draft.mode || draft.cart[0]?.mode || "retail");
+    setMode(draft.mode || draft.cart[0]?.mode || "wholesale");
     setCart(draft.cart);
     setCustomer(draft.customer);
     const next = drafts.filter((_, i) => i !== index);
@@ -536,9 +542,37 @@ export function Checkout({ user, notify, onReceipt }) {
             {error}
           </p>
         )}
+        {!register && (
+          <p role="status">
+            {register === undefined
+              ? "Checking register…"
+              : "Open a cash register session before completing a sale."}{" "}
+            {register === null && onOpenRegister && (
+              <button
+                onClick={() => {
+                  if (cart.length) suspend();
+                  onOpenRegister();
+                }}
+              >
+                Open register (save cart)
+              </button>
+            )}
+          </p>
+        )}
         <button
           className="primary pay"
-          disabled={busy || !quote || quoteLoading || outstanding !== 0}
+          disabled={
+            busy ||
+            !register ||
+            !quote ||
+            quoteLoading ||
+            outstanding !== 0 ||
+            payments.some(
+              (p) =>
+                Number(p.amount) <= 0 ||
+                (p.method !== "cash" && !p.reference.trim()),
+            )
+          }
           onClick={pay}
         >
           {busy ? "Completing sale…" : "Complete sale"}

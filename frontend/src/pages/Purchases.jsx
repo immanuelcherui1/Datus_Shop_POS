@@ -1,3 +1,5 @@
+import { convertedCost } from "../lib/cost";
+import { FundsForm } from "../components/FundsForm";
 import { BrandLogo } from "../components/Brand";
 import { createPortal } from "react-dom";
 import React, { useEffect, useRef, useState } from "react";
@@ -34,6 +36,7 @@ export function Purchases({ notify, initialProducts = [], user }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const submit = useRef(operation());
+  const [paying, setPaying] = useState(null);
   async function load() {
     const o = await api(`/purchases?page=${page}`);
     setOrders(o.items);
@@ -86,21 +89,27 @@ export function Purchases({ notify, initialProducts = [], user }) {
       old.map((l, n) => {
         if (n !== i) return l;
         const next = { ...l, [key]: value };
-        if (key === "product_id" || key === "purchase_unit") {
-          const p = products.find((p) => p.id === Number(next.product_id));
+        const p = products.find((p) => p.id === Number(next.product_id));
+        if (key === "product_id") {
           next.unit_cost =
-            key === "purchase_unit" && p
-              ? (
-                  Number(l.unit_cost) *
-                  (value === "pack"
-                    ? Number(p.pack_size)
-                    : 1 / Number(p.pack_size))
-                ).toFixed(6)
-              : p?.[
-                  next.purchase_unit === "pack"
-                    ? "cost_per_pack"
-                    : "cost_per_unit"
-                ] || "0";
+            p?.[
+              next.purchase_unit === "pack" ? "cost_per_pack" : "cost_per_unit"
+            ] || "0";
+          next.cost_basis = { amount: p?.cost_per_pack || "0", unit: "pack" };
+        } else if (key === "unit_cost") {
+          next.cost_basis = { amount: value, unit: l.purchase_unit };
+        } else if (key === "purchase_unit" && p) {
+          const basis = l.cost_basis || {
+            amount: l.unit_cost,
+            unit: l.purchase_unit,
+          };
+          next.cost_basis = basis;
+          next.unit_cost = convertedCost(
+            basis.amount,
+            basis.unit,
+            value,
+            p.pack_size,
+          );
         }
         return next;
       }),
@@ -113,7 +122,10 @@ export function Purchases({ notify, initialProducts = [], user }) {
         {
           supplier_id: Number(supplier),
           status,
-          lines: lines.map((l) => ({ ...l, product_id: Number(l.product_id) })),
+          lines: lines.map(({ cost_basis, ...l }) => ({
+            ...l,
+            product_id: Number(l.product_id),
+          })),
         },
         editing ? "PUT" : "POST",
       );
@@ -252,7 +264,14 @@ export function Purchases({ notify, initialProducts = [], user }) {
               {products
                 .filter((p) => p.active)
                 .map((p) => (
-                  <option key={p.id} value={p.id}>
+                  <option
+                    key={p.id}
+                    value={p.id}
+                    disabled={lines.some(
+                      (other, index) =>
+                        index !== i && Number(other.product_id) === p.id,
+                    )}
+                  >
                     {p.name} · {quantity(p.quantity)} {p.unit}{" "}
                     {Number(p.quantity) <= Number(p.reorder_level)
                       ? "· LOW"
@@ -307,8 +326,9 @@ export function Purchases({ notify, initialProducts = [], user }) {
             )}{" "}
             {user.currency}
           </strong>
-          . Suggested costs use current average stock cost; confirm supplier
-          prices before ordering.
+          . Suggested costs use current stock average, or the last recorded
+          receipt/opening cost when sold out; confirm supplier prices before
+          ordering.
         </p>
         <div className="actions">
           <button type="button" onClick={() => setLines([...lines, blank()])}>
@@ -341,6 +361,12 @@ export function Purchases({ notify, initialProducts = [], user }) {
             e.preventDefault();
             const form = e.currentTarget,
               data = new FormData(form);
+            if (!o.lines.some((l) => Number(data.get(`q${l.id}`)) > 0)) {
+              setError(
+                "Enter at least one delivered quantity before confirming receipt.",
+              );
+              return;
+            }
             act(async () => {
               await submit.current(`/purchases/${o.id}/receipts`, {
                 lines: o.lines
@@ -348,6 +374,7 @@ export function Purchases({ notify, initialProducts = [], user }) {
                     line_id: l.id,
                     quantity: data.get(`q${l.id}`) || "0",
                     unit_cost: data.get(`c${l.id}`) || null,
+                    unit: data.get(`u${l.id}`) || "unit",
                   }))
                   .filter((l) => Number(l.quantity) > 0),
               });
@@ -385,22 +412,33 @@ export function Purchases({ notify, initialProducts = [], user }) {
               </span>
               {["ordered", "partial"].includes(o.status) && (
                 <>
+                  <select
+                    name={`u${l.id}`}
+                    aria-label={`Receiving unit ${l.id}`}
+                  >
+                    <option value="unit">Base units</option>
+                    {(l.pack_size_snapshot || Number(l.conversion) > 1) && (
+                      <option value="pack">
+                        Packs (×{quantity(l.pack_size_snapshot || l.conversion)}{" "}
+                        base units)
+                      </option>
+                    )}
+                  </select>
                   <input
                     aria-label={`Receive line ${l.id}`}
                     name={`q${l.id}`}
                     type="number"
                     min="0"
                     step="1"
-                    max={Number(l.quantity) - Number(l.received)}
-                    placeholder="Actual base units"
+                    placeholder="Quantity in selected unit"
                   />
                   <input
-                    aria-label={`Actual base unit cost ${l.id}`}
+                    aria-label={`Actual selected unit cost ${l.id}`}
                     name={`c${l.id}`}
                     type="number"
                     min="0"
                     step="0.000001"
-                    placeholder={`Cost/base unit (${l.unit_cost})`}
+                    placeholder="Optional actual cost / selected unit"
                   />
                 </>
               )}
@@ -410,7 +448,21 @@ export function Purchases({ notify, initialProducts = [], user }) {
             <button
               type="button"
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
+                try {
+                  const found = await api(
+                    `/products?ids=${o.lines.map((l) => l.product_id).join(",")}&size=100`,
+                  );
+                  setProducts((old) => [
+                    ...found.items,
+                    ...old.filter(
+                      (p) => !found.items.some((x) => x.id === p.id),
+                    ),
+                  ]);
+                } catch (e) {
+                  setError(e.message);
+                  return;
+                }
                 setEditing(o.id);
                 setSupplier(String(o.supplier_id));
                 setLines(
@@ -418,7 +470,9 @@ export function Purchases({ notify, initialProducts = [], user }) {
                     product_id: String(l.product_id),
                     quantity: quantity(l.ordered_quantity || l.quantity),
                     unit_cost: l.ordered_unit_cost || l.unit_cost,
-                    purchase_unit: Number(l.conversion) > 1 ? "pack" : "unit",
+                    purchase_unit:
+                      l.purchase_unit ||
+                      (Number(l.conversion) > 1 ? "pack" : "unit"),
                   })),
                 );
                 window.scrollTo({ top: 0, behavior: "smooth" });
@@ -432,8 +486,57 @@ export function Purchases({ notify, initialProducts = [], user }) {
               Confirm goods received
             </button>
           )}
+          <p>
+            Value received: {cash(o.received_value)} ·{" "}
+            {o.payments_tracked
+              ? `Paid: ${cash(o.paid)} · Unpaid received goods: ${cash(o.outstanding)}`
+              : "Historical payment status unknown; do not repay through this screen."}
+          </p>
+          {user?.permissions?.includes("cash_manage") &&
+            o.payments_tracked &&
+            Number(o.outstanding) > 0 && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setPaying(o)}
+              >
+                Record payment for PO-{o.id}
+              </button>
+            )}
+          {!!o.payments?.length && (
+            <details>
+              <summary>Payment history</summary>
+              {o.payments.map((p) => (
+                <p key={p.id}>
+                  #{p.id} · {p.kind} · {p.method} · {cash(-Number(p.amount))} ·{" "}
+                  {p.reference || p.reason}
+                </p>
+              ))}
+            </details>
+          )}
         </form>
       ))}
+      {paying && (
+        <div className="modal-backdrop">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Supplier payment"
+            className="receipt-modal"
+          >
+            <FundsForm
+              user={user}
+              purchase={paying}
+              onCancel={() => setPaying(null)}
+              onDone={async () => {
+                setPaying(null);
+                await load();
+                notify("Supplier payment recorded.");
+              }}
+            />
+          </section>
+        </div>
+      )}
       <Pager {...{ page, setPage, pages }} />
       {printOrder &&
         createPortal(
@@ -483,8 +586,11 @@ export function Purchases({ notify, initialProducts = [], user }) {
                         <td>{unitPrice(l.ordered_unit_cost || l.unit_cost)}</td>
                         <td>
                           {cash(
-                            Number(l.ordered_quantity || l.quantity) *
-                              Number(l.ordered_unit_cost || l.unit_cost),
+                            Number(
+                              l.line_total ??
+                                Number(l.ordered_quantity || l.quantity) *
+                                  Number(l.ordered_unit_cost ?? l.unit_cost),
+                            ),
                           )}
                         </td>
                       </tr>

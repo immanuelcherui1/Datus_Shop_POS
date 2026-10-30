@@ -50,3 +50,20 @@ def test_allocation_and_wholesale_checkout_compete_for_same_unit(app,client):
         results=list(pool.map(worker,['transfer','sale']))
     assert sorted(r.status_code for r in results)==[200,409],[(r.status_code,r.json) for r in results]
     assert client.get('/api/inventory/reconciliation').json['ok']
+
+@pytest.mark.postgres
+@pytest.mark.parametrize('operation', ['supplier_payment','cash_out','reversal'])
+def test_parallel_funds_never_double_spend(app,client,operation):
+    from test_logic_workflows import item,order,receive,open_till,pay,funds,reverse
+    with app.app_context():
+        if db.engine.dialect.name!='postgresql':pytest.skip('PostgreSQL required for funds locks.')
+    p,_=item(client);o=order(client,p,'1','10');receive(client,o,'1','pack');open_till(client,'10','0')
+    entry=funds(client,'10').json if operation=='reversal' else None
+    barrier=Barrier(2)
+    def worker(i):
+        c=app.test_client();c.post('/api/auth/login',json={'username':'owner','password':'test-only-password'})
+        barrier.wait(timeout=10)
+        return pay(c,o) if operation=='supplier_payment' else reverse(c,entry) if operation=='reversal' else funds(c)
+    with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(worker,[1,2]))
+    assert sorted(r.status_code for r in results)==[200,409],[(r.status_code,r.json) for r in results]
+    assert client.get('/api/register').json['expected']==('10.00' if operation=='reversal' else '0.00')

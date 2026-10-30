@@ -73,6 +73,14 @@ def smoke_test(directory):
         assert client.put('/api/purchases/'+str(draft['id']),json={'supplier_id':supplier['id'],'status':'ordered','lines':[{'product_id':product['id'],'quantity':'2','purchase_unit':'pack','unit_cost':'60'}]},headers={**csrf,'Idempotency-Key':secrets.token_hex(16)}).status_code == 200
         assert client.get('/api/inventory/reconciliation').json['ok']
         assert client.get('/api/register').json['expected'] == '210.00'
+        order = next(o for o in client.get('/api/purchases').json['items'] if o['id']==draft['id'])
+        post(f"/purchases/{order['id']}/receipts", {'lines':[{'line_id':order['lines'][0]['id'],'quantity':'1','unit':'pack'}]})
+        paid=post(f"/purchases/{order['id']}/payments", {'amount':'60','method':'cash','reason':'Smoke supplier payment'})
+        assert client.get('/api/register').json['expected']=='150.00'
+        post(f"/register/movements/{paid['id']}/reversal", {'reason':'Supplier returned payment'})
+        assert client.get('/api/register').json['expected']=='210.00'
+        post('/inventory/transfers', {'product_id':product['id'],'quantity':'1','source':'retail','reason':'Return shelf stock'})
+        assert client.get('/api/inventory/reconciliation').json['ok']
         snapshot = client.get(f"/api/sales/{sale['id']}").json
         installation.backup()
         assert list((directory / 'backups').glob('*.dump.enc'))
@@ -91,6 +99,6 @@ def smoke_test(directory):
         (directory / 'smoke-result.json').write_text(json.dumps({'ok': True, 'checks': [
             'first-run migrations', 'owner creation', 'static frontend', 'cookie authentication', 'wholesale checkout',
             'stock reconciliation', 'cash reconciliation', 'encrypted backup', 'restart preserves data and credentials',
-            'stock allocations and retail checkout', 'M-Pesa reconciliation', 'supplier edit and draft confirmation', 'restricted runtime database permissions', 'separate remote listener with secure cookies']}), encoding='utf-8')
+            'supplier payment and reversal', 'pack goods receiving', 'retail-to-wholesale transfer', 'stock allocations and retail checkout', 'M-Pesa reconciliation', 'supplier edit and draft confirmation', 'restricted runtime database permissions', 'separate remote listener with secure cookies']}), encoding='utf-8')
     finally:
         installation.stop()

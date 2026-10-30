@@ -29,7 +29,8 @@ export function Inventory({ notify }) {
     product_id: "",
     quantity: "",
     unit: "unit",
-    reason: "Retail allocation",
+    reason: "Stock allocation",
+    source: "wholesale",
   });
   const [query, setQuery] = useState("");
   async function load() {
@@ -107,6 +108,7 @@ export function Inventory({ notify }) {
               product_id: Number(transfer.product_id),
             });
             await load();
+            setTransfer({ ...transfer, quantity: "" });
             notify(`Allocation ${r.reference} posted.`);
           } catch (e) {
             setError(e.message);
@@ -115,7 +117,18 @@ export function Inventory({ notify }) {
           }
         }}
       >
-        <h3>Allocate wholesale stock to retail</h3>
+        <h3>Transfer stock between allocations</h3>
+        <Field label="Transfer direction">
+          <select
+            value={transfer.source}
+            onChange={(e) =>
+              setTransfer({ ...transfer, source: e.target.value })
+            }
+          >
+            <option value="wholesale">Wholesale → Retail</option>
+            <option value="retail">Retail → Wholesale</option>
+          </select>
+        </Field>
         <Field label="Product">
           <select
             required

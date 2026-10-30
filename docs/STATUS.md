@@ -35,7 +35,7 @@ Cloud credentials, a real receipt printer, real scanner and production payment p
 - No independently offline Android/device synchronization. The Windows database is authoritative; browser caching is not used as a second ledger.
 - No Android APK yet. API boundaries permit a future mobile client after secure LAN access is designed.
 - No live Daraja/card/bank initiation, webhook verification or provider reconciliation. External settlement is a privileged manual record only.
-- No credit balances, customer accounts, loyalty, expenses module, supplier payable ledger or full accounting journal.
+- No customer credit, loyalty or full accounting journal. New-order received-goods payments and register money movements are tracked; supplier advances/credit notes and net operating-expense profit are not.
 - Tax-exclusive pricing only; tax rate configured per product. No fiscal/e-invoicing integration or legal certification.
 - No batch-based expiry, serials, reservations or formal physical-count workflow. Product-level earliest expiry is a manually maintained indicator.
 - Product names, categories and suppliers are business-wide. Customer is an optional name snapshot, not a full customer profile.
@@ -66,3 +66,7 @@ DATUS 0.2.2 adds opt-in Tailscale Funnel configuration for a separate secured lo
 ## Wholesale/retail amendments — 30 October 2026
 
 Version 0.3.0 adds a shared inventory with wholesale/retail allocations, four selling modes, purchase draft editing/confirmation and print/PDF, supplier editing, actual receipt costs, catalogue suggestions, receipt accountability, session history and M-Pesa reconciliation, and interactive dashboard charts/stock lists. See [AMENDMENTS.md](AMENDMENTS.md) for migration requirements and precise limits. Verified at commit `239496e`: integrity CI run [41023040299](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41023040299) passed 40 SQLite tests (3 locking tests skipped), 43 tests with PostgreSQL configured, 7 frontend tests and production build. Windows acceptance run [41023040277](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41023040277) passed. Migration preservation/refusal tests use disposable SQLite databases; PostgreSQL schema creation and allocation-vs-sale locking are also tested. Browser checks covered low-stock multi-selection into a draft, purchase print preview, separate checkout choices, session reconciliation and desktop/mobile layout.
+
+## 0.4.0 source changes
+
+See [workflow integrity](WORKFLOW-INTEGRITY.md) for fixes, new money workflows, migration handling and regression cases. Verification is in progress; use the documented verified installer until the new build passes.

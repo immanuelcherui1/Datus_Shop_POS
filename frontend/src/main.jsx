@@ -80,6 +80,7 @@ function App() {
     user,
     notify: setToast,
     onReceipt: setReceipt,
+    onOpenRegister: () => setView("Cash register"),
     onPurchase: (products) => {
       setPurchaseProducts(products);
       setView("Purchases");

@@ -57,7 +57,7 @@ export function Products({ notify }) {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const { id, ...data } = form;
+    const { id, unit_locked, ...data } = form;
     try {
       await submit.current(
         id ? `/products/${id}` : "/products",
@@ -108,11 +108,21 @@ export function Products({ notify }) {
       {form && (
         <form className="panel form-grid" onSubmit={save}>
           <h3>{form.id ? "Edit product" : "New product"}</h3>
+          {form.unit_locked && (
+            <p>
+              Base unit and pack size are fixed because this product has
+              stock/order history. Use a new SKU for a different size.
+            </p>
+          )}
           {Object.keys(emptyProduct)
             .filter((k) => k !== "active")
             .map((k) => (
               <Field
                 key={k}
+                disabled={
+                  busy ||
+                  (form.unit_locked && ["unit", "pack_size"].includes(k))
+                }
                 label={
                   k === "reorder_packs"
                     ? `Reorder level · ${form.packaging_unit || "packs"}`
@@ -241,6 +251,7 @@ export function Products({ notify }) {
                       setForm({
                         id: p.id,
                         reorder_level: p.reorder_level,
+                        unit_locked: p.unit_locked,
                         ...Object.fromEntries(
                           Object.keys(emptyProduct).map((k) => [
                             k,
