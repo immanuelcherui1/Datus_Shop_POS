@@ -188,7 +188,9 @@ function App() {
           </button>
         </div>
       )}
-      {receipt && <Receipt sale={receipt} close={() => setReceipt(null)} />}
+      {receipt && (
+        <Receipt user={user} sale={receipt} close={() => setReceipt(null)} />
+      )}
     </div>
   );
 }

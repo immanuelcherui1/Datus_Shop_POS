@@ -8,6 +8,7 @@ from .extensions import db
 from .models import (Product, Stock, Movement, Audit, Purchase, PurchaseLine, Receipt, User,
                      Sale, SaleLine, Payment, CashSession, CashMovement, Return, ReturnLine, Refund)
 from .security import allowed, scoped
+from . import packaging
 
 ZERO = Decimal('0')
 
@@ -75,7 +76,7 @@ def consume_value(stock, quantity, location='wholesale'):
 def transfer(data):
     stock = lock_stock([data['product_id']])[data['product_id']]
     product = db.session.scalar(select(Product).where(Product.id == stock.product_id).with_for_update())
-    quantity = data['quantity'] * (product.pack_size if data['unit'] == 'pack' else 1)
+    quantity = data['quantity'] * Decimal(packaging.selected(product, data)['conversion'])
     source = data['source']
     target = 'retail' if source == 'wholesale' else 'wholesale'
     if quantity > Decimal('1000000000'):
@@ -94,7 +95,7 @@ def sale_location(mode):
 
 
 def quote(data):
-    keys = [(line['product_id'], line['mode']) for line in data['lines']]
+    keys = [(line['product_id'], sale_location(line['mode']), line.get('packaging_key') or ('pack' if line['mode'] in ('wholesale','retail_pack') else 'unit')) for line in data['lines']]
     if len(keys) != len(set(keys)):
         raise BadRequest('Combine duplicate product and selling-unit lines.')
     types = {sale_location(item['mode']) for item in data['lines']}
@@ -105,9 +106,16 @@ def quote(data):
         product = db.session.get(Product, item['product_id'])
         if not product or not product.active or not db.session.get(Stock, (product.id, g.user.branch_id)):
             raise BadRequest('Product is missing or inactive.')
-        conversion = product.pack_size if item['mode'] in ('wholesale', 'retail_pack') else Decimal('1')
-        price = {'wholesale': product.wholesale_price, 'wholesale_unit': valuation(product.wholesale_price / product.pack_size),
-                 'retail': product.retail_price, 'retail_pack': product.retail_price * product.pack_size}[item['mode']]
+        key = item.get('packaging_key') or ('pack' if item['mode'] in ('wholesale', 'retail_pack') else 'unit')
+        option = packaging.resolve(product, key)
+        conversion = Decimal(option['conversion'])
+        channel = sale_location(item['mode'])
+        expected_mode = ('wholesale_unit' if key == 'unit' else 'wholesale') if channel == 'wholesale' else ('retail' if key == 'unit' else 'retail_pack')
+        if item['mode'] != expected_mode:
+            raise BadRequest('Selling mode does not match the packaging option.')
+        if option[channel + '_price'] is None:
+            raise BadRequest('This packaging option is not sold in the selected channel.')
+        price = Decimal(option[channel + '_price'])
         base_quantity = item['quantity'] * conversion
         if base_quantity != base_quantity.quantize(Decimal('.001')):
             raise BadRequest('This pack quantity requires more than three base-unit decimals.')
@@ -119,7 +127,7 @@ def quote(data):
         subtotal = gross - item['discount']
         tax = money(subtotal * product.tax_rate)
         result.append(dict(product_id=product.id, sku=product.sku, name=product.name,
-            unit=product.packaging_unit if item['mode'] in ('wholesale', 'retail_pack') else product.unit, mode=item['mode'], quantity=item['quantity'], conversion=conversion,
+            packaging_key=key, unit=option['name'], mode=item['mode'], quantity=item['quantity'], conversion=conversion,
             base_quantity=base_quantity, unit_price=price, discount=item['discount'],
             tax_rate=product.tax_rate, subtotal=subtotal, tax=tax))
     subtotal = sum((line['subtotal'] for line in result), ZERO)
@@ -213,7 +221,12 @@ def receive(purchase_id, data):
         line = lines[item['line_id']]
         entered = item['quantity']
         conversion = Decimal(1)
-        if item['unit']=='pack':
+        if item.get('packaging_key'):
+            choices = {p['key']:p for p in (line.packaging_snapshot or [])}
+            if item['packaging_key'] not in choices:
+                raise BadRequest('This receiving unit is not in the saved purchase packaging snapshot.')
+            conversion = Decimal(choices[item['packaging_key']]['conversion'])
+        elif item['unit']=='pack':
             conversion = line.pack_size_snapshot or (line.conversion if line.conversion>1 else None)
             if conversion is None:
                 raise BadRequest('This historical order has no pack-size snapshot; receive base units.')

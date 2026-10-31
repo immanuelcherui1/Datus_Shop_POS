@@ -37,7 +37,16 @@ class UserSchema(Schema):
     role = fields.String(required=True, validate=validate.OneOf(['owner', 'manager', 'cashier', 'inventory', 'accountant']))
 
 
+class PackagingSchema(Schema):
+    key = fields.String(required=True, validate=validate.Regexp(r'^[a-z][a-z0-9_-]{0,29}$'))
+    name = text(30, required=True)
+    conversion = Exact(0, '1', required=True)
+    wholesale_price = Exact(load_default=None, allow_none=True)
+    retail_price = Exact(load_default=None, allow_none=True)
+
+
 class ProductSchema(Schema):
+    packages = fields.List(fields.Nested(PackagingSchema), validate=validate.Length(max=20))
     sku = fields.String(required=True, validate=validate.Regexp(r'^[A-Za-z0-9._-]{1,60}$'))
     barcode = fields.String(load_default=None, allow_none=True, validate=validate.Length(min=1, max=80))
     name = text(required=True)
@@ -55,6 +64,7 @@ class ProductSchema(Schema):
 
 
 class PurchaseLineSchema(Schema):
+    packaging_key = fields.String(load_default=None, allow_none=True, validate=validate.Length(min=1,max=30))
     purchase_unit = fields.String(load_default='unit', validate=validate.OneOf(['unit', 'pack']))
     product_id = fields.Integer(required=True, strict=True)
     quantity = Exact(0, '1', required=True)
@@ -68,6 +78,7 @@ class PurchaseSchema(Schema):
 
 
 class ReceiveLineSchema(Schema):
+    packaging_key = fields.String(load_default=None, allow_none=True, validate=validate.Length(min=1,max=30))
     unit = fields.String(load_default="unit", validate=validate.OneOf(["unit","pack"]))
     unit_cost = Exact(6, load_default=None, allow_none=True)
     line_id = fields.Integer(required=True, strict=True)
@@ -79,6 +90,7 @@ class ReceiveSchema(Schema):
 
 
 class CartLineSchema(Schema):
+    packaging_key = fields.String(load_default=None, allow_none=True, validate=validate.Length(min=1,max=30))
     product_id = fields.Integer(required=True, strict=True)
     quantity = Exact(3, '0.001', required=True)
     mode = fields.String(required=True, validate=validate.OneOf(['retail', 'wholesale', 'retail_pack', 'wholesale_unit']))
@@ -107,6 +119,7 @@ class CheckoutSchema(QuoteSchema):
 
 
 class AdjustmentSchema(Schema):
+    packaging_key = fields.String(load_default=None, allow_none=True, validate=validate.Length(min=1,max=30))
     password = text(200, required=True, load_only=True)
     unit = fields.String(load_default='unit', validate=validate.OneOf(['unit','pack']))
     location = fields.String(load_default='wholesale', validate=validate.OneOf(['wholesale', 'retail']))
@@ -154,6 +167,7 @@ class ReturnSchema(Schema):
 
 
 class TransferSchema(Schema):
+    packaging_key = fields.String(load_default=None, allow_none=True, validate=validate.Length(min=1,max=30))
     source = fields.String(load_default="wholesale", validate=validate.OneOf(["wholesale","retail"]))
     product_id = fields.Integer(required=True, strict=True)
     quantity = Exact(0, '1', required=True)
@@ -191,3 +205,10 @@ class CashEntrySchema(FundsSchema):
 class ReversalSchema(Schema):
     reason = fields.String(required=True, validate=validate.Length(min=5,max=500))
     reference = text(120, load_default=None, allow_none=True)
+
+
+class PrintSchema(Schema):
+    printer = text(220, required=True)
+    columns = fields.Integer(strict=True, load_default=48, validate=validate.OneOf([32,42,48]))
+    mode = fields.String(load_default='escpos', validate=validate.OneOf(['escpos','text']))
+    cut = fields.Boolean(load_default=False)

@@ -81,6 +81,26 @@ def smoke_test(directory):
         assert client.get('/api/register').json['expected']=='210.00'
         post('/inventory/transfers', {'product_id':product['id'],'quantity':'1','source':'retail','reason':'Return shelf stock'})
         assert client.get('/api/inventory/reconciliation').json['ok']
+        candle = post('/products', dict(sku='CANDLES',name='Candles',unit='piece',packaging_unit='carton',pack_size='96',retail_price='10',wholesale_price='768',packages=[
+            dict(key='unit',name='piece',conversion='1',retail_price='10',wholesale_price=None),
+            dict(key='packet',name='packet',conversion='8',retail_price='80',wholesale_price='64'),
+            dict(key='pack',name='carton',conversion='96',retail_price=None,wholesale_price='768')]))
+        post('/inventory/adjustments',dict(product_id=candle['id'],password=password,quantity='2',packaging_key='pack',unit_cost='5',reason='Candle package smoke'))
+        candle_sale=post('/sales',dict(lines=[dict(product_id=candle['id'],quantity='1',mode='wholesale',packaging_key='pack'),dict(product_id=candle['id'],quantity='1',mode='wholesale',packaging_key='packet')],payments=[dict(method='cash',amount='832')]))
+        assert [x['unit'] for x in candle_sale['lines']]==['carton','packet']
+        from datus import printing
+        assert b'832.00' in printing.receipt_bytes(candle_sale,48,'text')
+        # Exercise the frozen RAW API/retry path with a fake spooler, never a real printer.
+        original_list,original_send=printing.printers,printing.send_raw
+        print_calls=[]
+        try:
+            printing.printers=lambda:['DATUS smoke printer']
+            printing.send_raw=lambda *args:print_calls.append(args) or 1
+            printed=post(f"/sales/{candle_sale['id']}/print",dict(printer='DATUS smoke printer'))
+            assert printed['status']=='queued' and len(print_calls)==1
+        finally:
+            printing.printers,printing.send_raw=original_list,original_send
+        assert client.get('/api/inventory/reconciliation').json['ok']
         snapshot = client.get(f"/api/sales/{sale['id']}").json
         installation.backup()
         assert list((directory / 'backups').glob('*.dump.enc'))
@@ -97,7 +117,7 @@ def smoke_test(directory):
             privileges = connection.execute("SELECT has_table_privilege('datus_app','movement','UPDATE'), has_table_privilege('datus_app','movement','DELETE')").fetchone()
             assert privileges == (False, False)
         (directory / 'smoke-result.json').write_text(json.dumps({'ok': True, 'checks': [
-            'first-run migrations', 'owner creation', 'static frontend', 'cookie authentication', 'wholesale checkout',
+            'named packaging checkout', 'text receipt rendering', 'simulated RAW print API', 'first-run migrations', 'owner creation', 'static frontend', 'cookie authentication', 'wholesale checkout',
             'stock reconciliation', 'cash reconciliation', 'encrypted backup', 'restart preserves data and credentials',
             'supplier payment and reversal', 'pack goods receiving', 'retail-to-wholesale transfer', 'stock allocations and retail checkout', 'M-Pesa reconciliation', 'supplier edit and draft confirmation', 'restricted runtime database permissions', 'separate remote listener with secure cookies']}), encoding='utf-8')
     finally:

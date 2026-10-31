@@ -1521,13 +1521,95 @@ header {
   }
 }
 @media screen {
-  :root[data-theme="dark"] .sidebar nav button { background: transparent; }
-  :root[data-theme="dark"] .sidebar nav button:hover:not(:disabled) { background: #334b3c; }
-  :root[data-theme="dark"] .sidebar nav button.selected { background: #c2dda3; color: #163021; }
+  :root[data-theme="dark"] .sidebar nav button {
+    background: transparent;
+  }
+  :root[data-theme="dark"] .sidebar nav button:hover:not(:disabled) {
+    background: #334b3c;
+  }
+  :root[data-theme="dark"] .sidebar nav button.selected {
+    background: #c2dda3;
+    color: #163021;
+  }
 }
-.brand-mark { background: white; }
-button.stat.panel { display: block; text-align: left; }
+.brand-mark {
+  background: white;
+}
+button.stat.panel {
+  display: block;
+  text-align: left;
+}
 
 /* Funds controls need a full-width grid, not a grid nested in one narrow cell. */
-.funds-form > p, .funds-form > fieldset { grid-column: 1 / -1; }
-.funds-form > fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.funds-form > p,
+.funds-form > fieldset {
+  grid-column: 1 / -1;
+}
+.funds-form > fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Packaging controls and authoritative line amounts remain readable at narrow widths. */
+.catalogue-choice {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.catalogue-choice .product-card {
+  width: 100%;
+  flex: 1;
+}
+.catalogue-choice select {
+  width: 100%;
+}
+.cart-line-amount {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 10px;
+}
+.cart-line-amount strong {
+  white-space: nowrap;
+}
+.packaging-editor {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.packaging-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+@media (max-width: 700px) {
+  .packaging-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.thermal-controls {
+  padding: 12px;
+}
+.thermal-controls section {
+  display: grid;
+  gap: 10px;
+}
+.thermal-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.thermal-controls select {
+  max-width: 100%;
+}
+@media print {
+  .thermal-controls {
+    display: none !important;
+  }
+}

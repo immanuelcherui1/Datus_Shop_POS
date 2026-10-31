@@ -24,6 +24,10 @@ The supplied DATUS logo and icon now appear on sign-in, navigation, documents, b
 
 See [shop workflow details and API notes](docs/SHOP-WORKFLOWS.md). The verified 0.4.0 installer below includes all of these changes.
 
+## Packaging and direct printing update (0.5.0)
+
+The source now supports named packaging (piece, packet, carton) against one base-unit inventory, independent prices and availability per selling channel, package-aware purchasing/receiving/transfers/adjustments, and server-calculated amounts beside each Current Sale row. Saved receipts can print through the Windows RAW queue using plain text or ESC/POS built-in fonts, with explicit retry recovery and no repeat sale posting. See [setup, candle example, printer instructions and limitations](docs/PACKAGING-AND-PRINTING.md). Installer verification for 0.5.0 is in progress; the verified 0.4.0 download below does not include these new features yet.
+
 ## Workflow integrity update (0.4.0)
 
 The backend now preserves exact pack purchase totals and partial receipt valuation, retains a replenishment cost after sell-out, and locks used product units/conversions. Stock can move in both directions between wholesale and retail. Receiving accepts packs or base units using saved order conversions. Owners/managers can record supplier payments, till/M-Pesa money movements and compensating reversals with balance checks and retry recovery. Historical supplier payment status is explicitly unknown.

@@ -1,3 +1,4 @@
+import { packages } from "../lib/packaging";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Package,
@@ -25,6 +26,7 @@ export function Inventory({ notify }) {
     [busy, setBusy] = useState(false),
     [products, setProducts] = useState([]);
   const submit = useRef(operation());
+  const [adjustProduct, setAdjustProduct] = useState("");
   const [transfer, setTransfer] = useState({
     product_id: "",
     quantity: "",
@@ -53,6 +55,7 @@ export function Inventory({ notify }) {
     try {
       await submit.current("/inventory/adjustments", {
         ...data,
+        packaging_key: data.packaging_key || null,
         product_id: Number(data.product_id),
       });
       form.reset();
@@ -105,6 +108,8 @@ export function Inventory({ notify }) {
           try {
             const r = await submit.current("/inventory/transfers", {
               ...transfer,
+              packaging_key: transfer.unit,
+              unit: transfer.unit === "unit" ? "unit" : "pack",
               product_id: Number(transfer.product_id),
             });
             await load();
@@ -134,7 +139,11 @@ export function Inventory({ notify }) {
             required
             value={transfer.product_id}
             onChange={(e) =>
-              setTransfer({ ...transfer, product_id: e.target.value })
+              setTransfer({
+                ...transfer,
+                product_id: e.target.value,
+                unit: "unit",
+              })
             }
           >
             <option value="">Select product</option>
@@ -167,20 +176,24 @@ export function Inventory({ notify }) {
             value={transfer.unit}
             onChange={(e) => setTransfer({ ...transfer, unit: e.target.value })}
           >
-            <option value="unit">Base units</option>
-            <option value="pack">Packs</option>
+            {packages(
+              products.find((p) => String(p.id) === transfer.product_id),
+            ).map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.name} (×{quantity(o.conversion)} base)
+              </option>
+            ))}
           </select>
         </Field>
         <p>
           Equivalent base units:{" "}
           {quantity(
             Number(transfer.quantity) *
-              (transfer.unit === "pack"
-                ? Number(
-                    products.find((p) => String(p.id) === transfer.product_id)
-                      ?.pack_size || 1,
-                  )
-                : 1),
+              Number(
+                packages(
+                  products.find((p) => String(p.id) === transfer.product_id),
+                ).find((o) => o.key === transfer.unit)?.conversion || 1,
+              ),
           )}
           . Total business stock and value remain unchanged.
         </p>
@@ -198,9 +211,14 @@ export function Inventory({ notify }) {
       <form className="panel form-grid" onSubmit={adjust}>
         <h3>Authorized stock adjustment</h3>
         <Field label="Quantity unit">
-          <select name="unit">
-            <option value="unit">Base units</option>
-            <option value="pack">Packs</option>
+          <select name="packaging_key" key={adjustProduct}>
+            {packages(products.find((p) => String(p.id) === adjustProduct)).map(
+              (o) => (
+                <option key={o.key} value={o.key}>
+                  {o.name} (×{quantity(o.conversion)} base)
+                </option>
+              ),
+            )}
           </select>
         </Field>
         <Field
@@ -217,7 +235,11 @@ export function Inventory({ notify }) {
           </select>
         </Field>
         <Field label="Product">
-          <select name="product_id" required>
+          <select
+            name="product_id"
+            required
+            onChange={(e) => setAdjustProduct(e.target.value)}
+          >
             <option value="">Select product (first 100)</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>

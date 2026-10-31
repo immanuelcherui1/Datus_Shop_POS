@@ -1,3 +1,4 @@
+import { packages, sellingMode, lineKey } from "../lib/packaging";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Package,
@@ -44,6 +45,7 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
     submit.current = operation(`datus-pending-checkout-${user.id}`);
   const [pending, setPending] = useState(() => submit.current.pending());
   const search = useRef();
+  const [selections, setSelections] = useState({});
   const channel = mode.startsWith("wholesale") ? "wholesale" : "retail";
   const modes =
     channel === "wholesale"
@@ -59,13 +61,17 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
     Math.round(Number(quote?.total || 0) * 100) -
     payments.reduce((n, p) => n + Math.round(Number(p.amount || 0) * 100), 0);
   const available = (p) => p[`${channel}_quantity`];
-  const price = (p) =>
-    ({
-      retail: Number(p.retail_price),
-      retail_pack: Number(p.retail_price) * Number(p.pack_size),
-      wholesale: Number(p.wholesale_price),
-      wholesale_unit: Number(p.wholesale_price) / Number(p.pack_size),
-    })[mode];
+  const choices = (p) =>
+    packages(p).filter((o) => o[channel + "_price"] != null);
+  const chosen = (p) =>
+    choices(p).find((o) => o.key === selections[`${p.id}:${channel}`]) ||
+    choices(p).find(
+      (o) =>
+        o.key ===
+        (["wholesale", "retail_pack"].includes(mode) ? "pack" : "unit"),
+    ) ||
+    choices(p)[0];
+  const price = (p) => chosen(p)?.[channel + "_price"];
   useEffect(() => {
     let active = true;
     api(`/products?q=${encodeURIComponent(query)}&size=100`)
@@ -124,9 +130,12 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
       setError("This product is inactive or out of stock.");
       return;
     }
+    const option = chosen(product);
+    if (!option) return setError("No selling unit is enabled in this channel.");
+    const selectedMode = sellingMode(channel, option.key);
     setCart((items) => {
       const found = items.find(
-        (x) => x.product_id === product.id && x.mode === mode,
+        (x) => x.product_id === product.id && lineKey(x) === option.key,
       );
       return found
         ? items.map((x) =>
@@ -140,7 +149,8 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
               product,
               product_id: product.id,
               quantity: "1",
-              mode,
+              mode: selectedMode,
+              ...(product.packages ? { packaging_key: option.key } : {}),
               discount: "0",
             },
           ];
@@ -289,7 +299,10 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
           <select
             aria-label="Default selling mode"
             value={mode}
-            onChange={(e) => setMode(e.target.value)}
+            onChange={(e) => {
+              setMode(e.target.value);
+              setSelections({});
+            }}
           >
             {modes.map(([value, label]) => (
               <option key={value} value={value}>
@@ -306,31 +319,60 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
           {products
             .filter((p) => p.active)
             .map((p, i) => (
-              <button
-                className="product-card"
-                key={p.id}
-                disabled={busy || Number(available(p)) <= 0}
-                onClick={() => add(p)}
-              >
-                <div className={`product-art art-${i % 4}`}>
-                  <Package size={30} />
-                  <span>{p.category}</span>
-                </div>
-                <small>{p.sku}</small>
-                <h3>{p.name}</h3>
-                <div>
-                  <b>{unitPrice(price(p))}</b>
-                  <span
-                    className={
-                      Number(available(p)) <= Number(p.reorder_level)
-                        ? "low"
-                        : ""
+              <div key={p.id} className="catalogue-choice">
+                <button
+                  className="product-card"
+                  key={p.id}
+                  disabled={
+                    busy ||
+                    !chosen(p) ||
+                    Number(available(p)) < Number(chosen(p)?.conversion || 1)
+                  }
+                  onClick={() => add(p)}
+                >
+                  <div className={`product-art art-${i % 4}`}>
+                    <Package size={30} />
+                    <span>{p.category}</span>
+                  </div>
+                  <small>{p.sku}</small>
+                  <h3>{p.name}</h3>
+                  <div>
+                    <b>{unitPrice(price(p))}</b>
+                    <span
+                      className={
+                        Number(available(p)) <= Number(p.reorder_level)
+                          ? "low"
+                          : ""
+                      }
+                    >
+                      {quantity(available(p))} {p.unit} · {channel}
+                    </span>
+                  </div>
+                </button>
+                {p.packages && (
+                  <select
+                    aria-label={`Choose packaging ${p.name}`}
+                    disabled={busy}
+                    value={chosen(p)?.key || ""}
+                    onChange={(e) =>
+                      setSelections({
+                        ...selections,
+                        [`${p.id}:${channel}`]: e.target.value,
+                      })
                     }
                   >
-                    {quantity(available(p))} {p.unit} · {channel}
-                  </span>
-                </div>
-              </button>
+                    {!choices(p).length && (
+                      <option value="">Not sold in this channel</option>
+                    )}
+                    {choices(p).map((o) => (
+                      <option key={o.key} value={o.key}>
+                        {o.name} · {unitPrice(o[channel + "_price"])} ·{" "}
+                        {quantity(o.conversion)} {p.unit}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             ))}
         </div>
         {!products.length && (
@@ -373,7 +415,10 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
             </Empty>
           )}
           {cart.map((item, i) => (
-            <div className="cart-line" key={`${item.product_id}:${item.mode}`}>
+            <div
+              className="cart-line"
+              key={`${item.product_id}:${lineKey(item)}`}
+            >
               <div className="line-title">
                 <strong>{item.product.name}</strong>
                 <button
@@ -398,11 +443,28 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
                 />
                 <select
                   aria-label={`Selling unit ${item.product.name}`}
-                  value={item.mode}
+                  value={item.product.packages ? lineKey(item) : item.mode}
                   disabled={busy}
-                  onChange={(e) => update(i, "mode", e.target.value)}
+                  onChange={(e) =>
+                    item.product.packages
+                      ? setCart(
+                          cart.map((x, n) =>
+                            n === i
+                              ? {
+                                  ...x,
+                                  packaging_key: e.target.value,
+                                  mode: sellingMode(channel, e.target.value),
+                                }
+                              : x,
+                          ),
+                        )
+                      : update(i, "mode", e.target.value)
+                  }
                 >
-                  {modes.map(([value, label]) => (
+                  {(item.product.packages
+                    ? choices(item.product).map((o) => [o.key, o.name])
+                    : modes
+                  ).map(([value, label]) => (
                     <option
                       key={value}
                       value={value}
@@ -410,7 +472,9 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
                         (other, index) =>
                           index !== i &&
                           other.product_id === item.product_id &&
-                          other.mode === value,
+                          (item.product.packages
+                            ? lineKey(other) === value
+                            : other.mode === value),
                       )}
                     >
                       {label}
@@ -418,6 +482,30 @@ export function Checkout({ user, notify, onReceipt, onOpenRegister }) {
                   ))}
                 </select>
               </div>
+              <div
+                className="cart-line-amount"
+                aria-label={`Amount ${item.product.name} ${lineKey(item)}`}
+              >
+                <small>
+                  {item.quantity || "0"} ×{" "}
+                  {unitPrice(quote?.lines?.[i]?.unit_price)} ·{" "}
+                  {
+                    packages(item.product).find((o) => o.key === lineKey(item))
+                      ?.name
+                  }
+                </small>
+                <strong>
+                  {quoteLoading || !quote?.lines?.[i]
+                    ? "…"
+                    : cash(
+                        Number(quote.lines[i].subtotal) +
+                          Number(quote.lines[i].tax),
+                      )}
+                </strong>
+              </div>
+              {Number(quote?.lines?.[i]?.tax) > 0 && (
+                <small>Includes tax: {cash(quote.lines[i].tax)}</small>
+              )}
               {user.permissions.includes("discount") && (
                 <label className="inline-field">
                   Line discount

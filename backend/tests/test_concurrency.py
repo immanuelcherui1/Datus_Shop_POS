@@ -67,3 +67,23 @@ def test_parallel_funds_never_double_spend(app,client,operation):
     with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(worker,[1,2]))
     assert sorted(r.status_code for r in results)==[200,409],[(r.status_code,r.json) for r in results]
     assert client.get('/api/register').json['expected']==('10.00' if operation=='reversal' else '0.00')
+
+
+@pytest.mark.postgres
+def test_parallel_print_key_sends_only_once(app,client,monkeypatch):
+    from datus import printing
+    with app.app_context():
+        if db.engine.dialect.name != 'postgresql': pytest.skip('PostgreSQL required for print claim race.')
+    stock(client,'1');sale=post(client,'/sales',sale_body()).json
+    calls=[]
+    monkeypatch.setattr(printing,'printers',lambda:['XP-80S'])
+    monkeypatch.setattr(printing,'send_raw',lambda *args: calls.append(args) or 7)
+    barrier=Barrier(2)
+    def worker(i):
+        c=app.test_client();c.post('/api/auth/login',json={'username':'owner','password':'test-only-password'})
+        barrier.wait(timeout=10)
+        return post(c,f"/sales/{sale['id']}/print",{'printer':'XP-80S'},'parallel-print-copy')
+    with ThreadPoolExecutor(max_workers=2) as pool: results=list(pool.map(worker,[1,2]))
+    assert all(r.status_code==200 for r in results),[(r.status_code,r.json) for r in results]
+    assert len(calls)==1
+    assert all(r.json['status'] in ('unknown','queued') for r in results)

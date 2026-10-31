@@ -25,6 +25,7 @@ class User(db.Model):
 
 
 class Product(db.Model):
+    packages = db.Column(db.JSON)
     id = db.Column(db.Integer, primary_key=True)
     sku = db.Column(db.String(60), unique=True, nullable=False)
     barcode = db.Column(db.String(80), unique=True)
@@ -84,6 +85,8 @@ class Purchase(db.Model):
 
 
 class PurchaseLine(db.Model):
+    packaging_key = db.Column(db.String(30))
+    packaging_snapshot = db.Column(db.JSON)
     pack_size_snapshot = db.Column(db.Numeric(18,3))
     purchase_unit = db.Column(db.String(10))
     id = db.Column(db.Integer, primary_key=True)
@@ -148,6 +151,7 @@ class Sale(db.Model):
 
 
 class SaleLine(db.Model):
+    packaging_key = db.Column(db.String(30))
     id = db.Column(db.Integer, primary_key=True)
     sale_id = db.Column(db.ForeignKey('sale.id'), nullable=False)
     product_id = db.Column(db.ForeignKey('product.id'), nullable=False)

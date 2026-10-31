@@ -1,3 +1,4 @@
+import { ThermalPrint } from "../components/ThermalPrint";
 import { BrandLogo } from "../components/Brand";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -18,7 +19,7 @@ import { api, operation } from "../api";
 import { unitPrice, quantity, cash, localDate, dateTime } from "../lib/format";
 import { Field, Empty, Badge, Pager } from "../components/ui";
 
-export function Receipt({ sale, close }) {
+export function Receipt({ sale, close, user }) {
   const ref = useRef();
   useEffect(() => {
     ref.current?.focus();
@@ -39,7 +40,9 @@ export function Receipt({ sale, close }) {
         ref={ref}
         onKeyDown={(e) => {
           if (e.key === "Tab") {
-            const nodes = ref.current.querySelectorAll("button");
+            const nodes = ref.current.querySelectorAll(
+              "button:not(:disabled), input:not(:disabled), select:not(:disabled)",
+            );
             if (e.shiftKey && document.activeElement === nodes[0]) {
               e.preventDefault();
               nodes[nodes.length - 1].focus();
@@ -61,6 +64,9 @@ export function Receipt({ sale, close }) {
             <X size={18} />
           </button>
         </div>
+        {user?.permissions.includes("sell") && (
+          <ThermalPrint sale={sale} user={user} />
+        )}
         <article className="receipt">
           <BrandLogo />
           <h2>{sale.business_name}</h2>

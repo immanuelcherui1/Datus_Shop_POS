@@ -71,3 +71,16 @@ def test_funds_upgrade_preserves_history_and_marks_old_payments_unknown(tmp_path
         assert db.session.execute(text('SELECT amount,kind,purchase_id,reverses_id FROM cash_movement')).one()==(10,'settlement',None,None)
         with pytest.raises(Exception):db.session.execute(text("UPDATE cash_movement SET amount=20"))
         db.session.rollback();db.session.remove();db.engine.dispose()
+
+
+def test_packaging_upgrade_preserves_legacy_receipt_and_triggers(tmp_path):
+    app=old_app(tmp_path)
+    with app.app_context():
+        upgrade(revision='0004')
+        before=db.session.execute(text('SELECT id,unit,conversion,unit_price,subtotal FROM sale_line')).all()
+        upgrade()
+        assert db.session.execute(text('SELECT id,unit,conversion,unit_price,subtotal FROM sale_line')).all()==before
+        assert db.session.execute(text('SELECT packaging_key FROM sale_line')).scalar() is None
+        assert db.session.execute(text('SELECT packages FROM product')).scalar() is None
+        with pytest.raises(Exception):db.session.execute(text("UPDATE sale_line SET unit='changed'"))
+        db.session.rollback();db.session.remove();db.engine.dispose()

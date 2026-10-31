@@ -15,6 +15,7 @@ from .models import *
 from .schemas import *
 from .security import require, allowed, scoped, PERMISSIONS
 from . import services as service
+from . import packaging
 
 api = Blueprint('api', __name__, url_prefix='/api')
 
@@ -60,7 +61,7 @@ def mutation(scope):
         def wrapped(*args, **kwargs):
             key = request.headers.get('Idempotency-Key', '')
             if not 8 <= len(key) <= 100:
-                raise BadRequest('An Idempotency-Key of 8–100 characters is required.')
+                raise BadRequest('An Idempotency-Key of 8Ã¢â‚¬â€œ100 characters is required.')
             payload = request.get_json()
             if scope == 'stock.adjust':
                 payload = {k:v for k,v in payload.items() if k != 'password'}
@@ -164,6 +165,7 @@ def products():
         item.update(unit_locked=bool(db.session.scalar(select(Movement.id).where(Movement.product_id==product.id).limit(1)) or db.session.scalar(select(PurchaseLine.id).where(PurchaseLine.product_id==product.id).limit(1))), reorder_packs=str(service.valuation(product.reorder_level/product.pack_size)), quantity=str(stock.quantity), inventory_value=str(stock.value), retail_quantity=str(stock.retail_quantity),
             wholesale_quantity=str(stock.quantity-stock.retail_quantity), cost_per_unit=str(service.replenishment_cost(stock)),
             cost_per_pack=str(service.replenishment_cost(stock,product.pack_size)))
+        item['packaging_options'] = packaging.options(product)
         items.append(item)
     return jsonify({'items': items, 'total': result.total, 'pages': result.pages})
 
@@ -173,6 +175,7 @@ def products():
 @mutation('product.create')
 def create_product():
     data = body(ProductSchema())
+    packaging.normalize(data)
     normalize_reorder(data)
     remember_options(data)
     product = Product(**data)
@@ -198,6 +201,7 @@ def update_product(product_id):
     used = db.session.scalar(select(Movement.id).where(Movement.product_id==product.id).limit(1)) or db.session.scalar(select(PurchaseLine.id).where(PurchaseLine.product_id==product.id).limit(1))
     if used and (data['unit'].strip()!=product.unit or data['pack_size']!=product.pack_size):
         raise Conflict('Base unit and pack size are fixed once stock or orders exist. Create a new SKU for a different unit or package size.')
+    packaging.normalize(data, product, bool(used))
     normalize_reorder(data)
     remember_options(data)
     for key, value in data.items():
@@ -238,7 +242,7 @@ def adjust():
     stock = service.lock_stock([data['product_id']])[data['product_id']]
     product = db.session.scalar(select(Product).where(Product.id == stock.product_id).with_for_update())
     data['entered_quantity'] = data['quantity']
-    data['quantity'] *= product.pack_size if data['unit'] == 'pack' else 1
+    data['quantity'] *= Decimal(packaging.selected(product, data)['conversion'])
     if abs(data['quantity']) > Decimal('1000000000'):
         raise BadRequest('Converted adjustment exceeds the supported base-unit quantity.')
     value = service.valuation(data['quantity'] * data['unit_cost']) if data['quantity'] > 0 else -service.consume_value(stock, -data['quantity'], data['location'])
@@ -500,7 +504,7 @@ def add_catalogue_option():
     data = body(CatalogueSchema())
     data['name'] = data['name'].strip()
     if not data['name'] or (data['kind']=='unit' and len(data['name'])>30):
-        raise BadRequest('Unit labels must contain 1–30 characters.')
+        raise BadRequest('Unit labels must contain 1Ã¢â‚¬â€œ30 characters.')
     existing = db.session.scalar(select(CatalogueOption).where(CatalogueOption.kind==data['kind'],func.lower(CatalogueOption.name)==data['name'].lower()))
     if existing:
         return record(existing)
@@ -564,12 +568,13 @@ def save_purchase(purchase, data):
         p = db.session.scalar(select(Product).where(Product.id==values['product_id']).with_for_update())
         if not p.active:
             raise BadRequest('Inactive products cannot be ordered.')
-        conversion = p.pack_size if values['purchase_unit']=='pack' else Decimal('1')
+        option = packaging.selected(p, values, 'purchase_unit')
+        conversion = Decimal(option['conversion'])
         if values['quantity']*conversion > Decimal('1000000000') or values['quantity']*values['unit_cost'] > Decimal('999999999999'):
             raise BadRequest('Converted purchase quantity or value is too large.')
-        purchase.lines.append(PurchaseLine(pack_size_snapshot=p.pack_size,purchase_unit=values["purchase_unit"],product_id=p.id, quantity=values['quantity']*conversion,
+        purchase.lines.append(PurchaseLine(packaging_key=option['key'], packaging_snapshot=packaging.options(p), pack_size_snapshot=p.pack_size,purchase_unit=values["purchase_unit"],product_id=p.id, quantity=values['quantity']*conversion,
             unit_cost=service.valuation(values['unit_cost']/conversion), description=p.name,
-            unit=p.packaging_unit if values['purchase_unit']=='pack' else p.unit,
+            unit=option['name'],
             conversion=conversion, ordered_quantity=values['quantity'], ordered_unit_cost=values['unit_cost']))
     db.session.flush()
 
@@ -747,3 +752,66 @@ def post_funds():
 @mutation('funds.reverse')
 def reverse_funds(entry_id):
     return record(service.reverse_funds(entry_id,body(ReversalSchema())))
+
+
+@api.get('/printing/printers')
+@require('sell')
+def list_printers():
+    from . import printing
+    try:
+        return jsonify(printers=printing.printers())
+    except OSError:
+        return jsonify(printers=[], error='Windows printer queue unavailable. Install the printer on the shop server and start Print Spooler.'), 503
+
+
+@api.post('/printing/test')
+@api.post('/sales/<int:sale_id>/print')
+@require('sell')
+@limiter.limit('10 per minute', key_func=lambda: str(g.user.id))
+def print_receipt(sale_id=None):
+    # Unlike stock mutations, external printing cannot join a DB transaction.
+    # Persist the claim BEFORE sending: crash/timeout retries never resend paper.
+    from . import printing
+    data = body(PrintSchema())
+    sale = sale_record(scoped(db.session.get(Sale, sale_id))) if sale_id else None
+    key = request.headers.get('Idempotency-Key', '')
+    if not 8 <= len(key) <= 100:
+        raise BadRequest('An Idempotency-Key of 8-100 characters is required.')
+    scope = 'print:' + request.path
+    digest = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+    def existing():
+        row = db.session.scalar(select(Idempotency).where(Idempotency.user_id==g.user.id, Idempotency.scope==scope, Idempotency.key==key))
+        if row and row.digest != digest:
+            raise Conflict('This print key was already used for different settings.')
+        return row
+    retry = existing()
+    if retry:
+        return jsonify(retry.response)
+    try:
+        names = printing.printers()
+    except OSError:
+        raise BadRequest('Windows printer queue unavailable. Check the shop server printer setup.')
+    if data['printer'] not in names:
+        raise BadRequest('Select an installed printer on the shop server.')
+    payload = printing.receipt_bytes(sale, data['columns'], data['mode'], data['cut'], current_app.config['BUSINESS_TIMEZONE'])
+    result = dict(status='unknown', message='Print outcome is uncertain. Check the paper and Windows queue before requesting another copy.')
+    retry = Idempotency(user_id=g.user.id, scope=scope, key=key, digest=digest, response=result)
+    db.session.add(retry)
+    service.audit('print.requested', 'sale' if sale_id else 'printer', sale_id or 0, data)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        winner = existing()
+        if winner:
+            return jsonify(winner.response)
+        raise Conflict('Print request conflict. Recover the original request.')
+    try:
+        job = printing.send_raw(data['printer'], payload, sale['number'] if sale else 'DATUS printer test')
+        result = dict(status='queued', job_id=job, message='Sent to the Windows queue. Check the paper; queue acceptance does not confirm physical printing.')
+    except OSError:
+        pass  # Even a failed write can produce partial paper. Never resend automatically.
+    retry.response = result
+    service.audit('print.' + result['status'], 'sale' if sale_id else 'printer', sale_id or 0, result)
+    db.session.commit()
+    return jsonify(result)

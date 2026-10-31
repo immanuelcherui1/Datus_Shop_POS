@@ -1,3 +1,4 @@
+import { packages, convertPackagingCost } from "../lib/packaging";
 import { convertedCost } from "../lib/cost";
 import { FundsForm } from "../components/FundsForm";
 import { BrandLogo } from "../components/Brand";
@@ -97,26 +98,34 @@ export function Purchases({ notify, initialProducts = [], user }) {
         if (n !== i) return l;
         const next = { ...l, [key]: value };
         const p = products.find((p) => p.id === Number(next.product_id));
+        const factor = (key) =>
+          packages(p).find((o) => o.key === key)?.conversion || "1";
         if (key === "product_id") {
-          next.unit_cost =
-            p?.[
-              next.purchase_unit === "pack" ? "cost_per_pack" : "cost_per_unit"
-            ] || "0";
-          next.cost_basis = { amount: p?.cost_per_pack || "0", unit: "pack" };
+          next.packaging_key = undefined;
+          next.purchase_unit = "unit";
+          next.unit_cost = p?.cost_per_unit || "0";
+          next.cost_basis = {
+            amount: p?.cost_per_pack || "0",
+            factor: p?.pack_size || "1",
+          };
         } else if (key === "unit_cost") {
-          next.cost_basis = { amount: value, unit: l.purchase_unit };
-        } else if (key === "purchase_unit" && p) {
+          next.cost_basis = {
+            amount: value,
+            factor: factor(l.packaging_key || l.purchase_unit),
+          };
+        } else if ((key === "purchase_unit" || key === "packaging_key") && p) {
           const basis = l.cost_basis || {
             amount: l.unit_cost,
-            unit: l.purchase_unit,
+            factor: factor(l.packaging_key || l.purchase_unit),
           };
           next.cost_basis = basis;
-          next.unit_cost = convertedCost(
+          next.unit_cost = convertPackagingCost(
             basis.amount,
-            basis.unit,
-            value,
-            p.pack_size,
+            basis.factor,
+            factor(value),
           );
+          if (key === "packaging_key")
+            next.purchase_unit = value === "unit" ? "unit" : "pack";
         }
         return next;
       }),
@@ -288,11 +297,24 @@ export function Purchases({ notify, initialProducts = [], user }) {
             </select>
             <select
               aria-label={`Unit ${i + 1}`}
-              value={l.purchase_unit}
-              onChange={(e) => change(i, "purchase_unit", e.target.value)}
+              value={l.packaging_key || l.purchase_unit}
+              onChange={(e) =>
+                change(
+                  i,
+                  products.find((p) => p.id === Number(l.product_id))?.packages
+                    ? "packaging_key"
+                    : "purchase_unit",
+                  e.target.value,
+                )
+              }
             >
-              <option value="unit">Base unit</option>
-              <option value="pack">Pack / packaging unit</option>
+              {packages(
+                products.find((p) => p.id === Number(l.product_id)),
+              ).map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.name} (×{quantity(o.conversion)} base)
+                </option>
+              ))}
             </select>
             <input
               aria-label={`Quantity ${i + 1}`}
@@ -381,7 +403,12 @@ export function Purchases({ notify, initialProducts = [], user }) {
                     line_id: l.id,
                     quantity: data.get(`q${l.id}`) || "0",
                     unit_cost: data.get(`c${l.id}`) || null,
-                    unit: data.get(`u${l.id}`) || "unit",
+                    unit: l.packaging_snapshot
+                      ? "unit"
+                      : data.get(`u${l.id}`) || "unit",
+                    ...(l.packaging_snapshot
+                      ? { packaging_key: data.get(`u${l.id}`) || "unit" }
+                      : {}),
                   }))
                   .filter((l) => Number(l.quantity) > 0),
               });
@@ -423,12 +450,23 @@ export function Purchases({ notify, initialProducts = [], user }) {
                     name={`u${l.id}`}
                     aria-label={`Receiving unit ${l.id}`}
                   >
-                    <option value="unit">Base units</option>
-                    {(l.pack_size_snapshot || Number(l.conversion) > 1) && (
-                      <option value="pack">
-                        Packs (×{quantity(l.pack_size_snapshot || l.conversion)}{" "}
-                        base units)
-                      </option>
+                    {l.packaging_snapshot ? (
+                      l.packaging_snapshot.map((o) => (
+                        <option key={o.key} value={o.key}>
+                          {o.name} (×{quantity(o.conversion)} base units)
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="unit">Base units</option>
+                        {(l.pack_size_snapshot || Number(l.conversion) > 1) && (
+                          <option value="pack">
+                            Packs (×
+                            {quantity(l.pack_size_snapshot || l.conversion)}{" "}
+                            base units)
+                          </option>
+                        )}
+                      </>
                     )}
                   </select>
                   <input
@@ -477,6 +515,7 @@ export function Purchases({ notify, initialProducts = [], user }) {
                     product_id: String(l.product_id),
                     quantity: quantity(l.ordered_quantity || l.quantity),
                     unit_cost: l.ordered_unit_cost || l.unit_cost,
+                    packaging_key: l.packaging_key || undefined,
                     purchase_unit:
                       l.purchase_unit ||
                       (Number(l.conversion) > 1 ? "pack" : "unit"),

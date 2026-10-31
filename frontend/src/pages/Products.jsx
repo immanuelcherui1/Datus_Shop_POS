@@ -1,3 +1,4 @@
+import { packages } from "../lib/packaging";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Package,
@@ -57,12 +58,40 @@ export function Products({ notify }) {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const { id, unit_locked, ...data } = form;
+    const { id, unit_locked, packages: packageRows, ...data } = form;
     try {
       await submit.current(
         id ? `/products/${id}` : "/products",
         {
           ...data,
+          ...(packageRows
+            ? {
+                retail_price:
+                  packageRows.find((o) => o.key === "unit")?.retail_price ||
+                  "0",
+                wholesale_price:
+                  packageRows.find((o) => o.key === "pack")?.wholesale_price ||
+                  "0",
+                packages: packageRows.map(({ locked, ...o }) => ({
+                  ...o,
+                  name:
+                    o.key === "unit"
+                      ? data.unit
+                      : o.key === "pack"
+                        ? data.packaging_unit
+                        : o.name,
+                  conversion:
+                    o.key === "unit"
+                      ? "1"
+                      : o.key === "pack"
+                        ? data.pack_size
+                        : o.conversion,
+                  wholesale_price:
+                    o.wholesale_price === "" ? null : o.wholesale_price,
+                  retail_price: o.retail_price === "" ? null : o.retail_price,
+                })),
+              }
+            : {}),
           reorder_packs: data.reorder_packs || null,
           barcode: data.barcode || null,
           expiry_date: data.expiry_date || null,
@@ -115,7 +144,14 @@ export function Products({ notify }) {
             </p>
           )}
           {Object.keys(emptyProduct)
-            .filter((k) => k !== "active")
+            .filter(
+              (k) =>
+                k !== "active" &&
+                !(
+                  form.packages &&
+                  ["wholesale_price", "retail_price"].includes(k)
+                ),
+            )
             .map((k) => (
               <Field
                 key={k}
@@ -164,6 +200,147 @@ export function Products({ notify }) {
                 onChange={(e) => setForm({ ...form, [k]: e.target.value })}
               />
             ))}
+          <section className="packaging-editor">
+            <h4>Named packaging and channel prices</h4>
+            <p>
+              One inventory in {form.unit}. A blank price disables selling that
+              unit in that channel. Enter each conversion directly in base
+              units: packet = 8 pieces; carton = 96 pieces.
+            </p>
+            {!form.packages && (
+              <button
+                type="button"
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    packages: packages(form).map((o) => ({
+                      ...o,
+                      wholesale_price:
+                        o.wholesale_price == null
+                          ? ""
+                          : Number(o.wholesale_price).toFixed(2),
+                      retail_price:
+                        o.retail_price == null
+                          ? ""
+                          : Number(o.retail_price).toFixed(2),
+                    })),
+                  })
+                }
+              >
+                Configure multiple packaging units
+              </button>
+            )}
+            {form.packages?.map((o, i) => (
+              <div className="packaging-row" key={o.key}>
+                <Field
+                  label={`Packaging name ${i + 1}`}
+                  value={
+                    o.key === "unit"
+                      ? form.unit
+                      : o.key === "pack"
+                        ? form.packaging_unit
+                        : o.name
+                  }
+                  disabled={
+                    busy ||
+                    (form.unit_locked && o.locked) ||
+                    ["unit", "pack"].includes(o.key)
+                  }
+                  required
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      packages: form.packages.map((x, n) =>
+                        n === i ? { ...x, name: e.target.value } : x,
+                      ),
+                    })
+                  }
+                />
+                <Field
+                  label={`Base units ${i + 1}`}
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={
+                    o.key === "unit"
+                      ? "1"
+                      : o.key === "pack"
+                        ? form.pack_size
+                        : o.conversion
+                  }
+                  disabled={
+                    busy ||
+                    (form.unit_locked && o.locked) ||
+                    ["unit", "pack"].includes(o.key)
+                  }
+                  required
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      packages: form.packages.map((x, n) =>
+                        n === i ? { ...x, conversion: e.target.value } : x,
+                      ),
+                    })
+                  }
+                />
+                {["wholesale_price", "retail_price"].map((k) => (
+                  <Field
+                    key={k}
+                    label={`${k.replace("_price", " price")} ${i + 1}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={o[k] ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        packages: form.packages.map((x, n) =>
+                          n === i ? { ...x, [k]: e.target.value } : x,
+                        ),
+                      })
+                    }
+                  />
+                ))}
+                {!["unit", "pack"].includes(o.key) &&
+                  !(form.unit_locked && o.locked) && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          packages: form.packages.filter((_, n) => n !== i),
+                        })
+                      }
+                    >
+                      Remove packaging
+                    </button>
+                  )}
+              </div>
+            ))}
+            {form.packages && form.packages.length < 20 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    packages: [
+                      ...form.packages,
+                      {
+                        key: `u${Date.now()}`,
+                        name: "",
+                        conversion: "1",
+                        wholesale_price: "",
+                        retail_price: "",
+                      },
+                    ],
+                  })
+                }
+              >
+                Add packaging unit
+              </button>
+            )}
+          </section>
           <datalist id="categories">
             {options
               .filter((o) => o.kind === "category")
@@ -193,9 +370,11 @@ export function Products({ notify }) {
           </label>
           <p className="form-hint">
             Reorder level is entered in whole packaging units. On existing
-            products, leave it blank to preserve the current threshold.
-            Wholesale price is per pack. Retail price is per base unit. Tax is
-            exclusive: enter 0.16 for 16%. Confirm your applicable rates.
+            products, leave it blank to preserve the current threshold. For
+            simple products, wholesale price is per primary pack and retail
+            price is per base unit. When named packaging is configured, its
+            channel prices take precedence. Tax is exclusive: enter 0.16 for
+            16%. Confirm your applicable rates.
           </p>
           <div className="actions">
             <button className="primary" disabled={busy}>
@@ -228,9 +407,18 @@ export function Products({ notify }) {
                   <small>{p.category}</small>
                 </td>
                 <td>{p.sku}</td>
-                <td>{cash(p.retail_price)}</td>
                 <td>
-                  {cash(p.wholesale_price)}{" "}
+                  {p.packages &&
+                  p.packages.find((o) => o.key === "unit")?.retail_price == null
+                    ? "Not sold"
+                    : cash(p.retail_price)}
+                </td>
+                <td>
+                  {p.packages &&
+                  p.packages.find((o) => o.key === "pack")?.wholesale_price ==
+                    null
+                    ? "Not sold"
+                    : cash(p.wholesale_price)}{" "}
                   <small>
                     × {quantity(p.pack_size)} {p.unit}
                   </small>
@@ -252,6 +440,9 @@ export function Products({ notify }) {
                         id: p.id,
                         reorder_level: p.reorder_level,
                         unit_locked: p.unit_locked,
+                        packages:
+                          p.packages?.map((o) => ({ ...o, locked: true })) ||
+                          null,
                         ...Object.fromEntries(
                           Object.keys(emptyProduct).map((k) => [
                             k,
