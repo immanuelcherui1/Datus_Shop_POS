@@ -14,7 +14,7 @@ Enter your own current password, allocation, product, quantity unit, signed quan
 API: `POST /inventory/adjustments` requires `password`; `unit` is `unit` (default) or `pack`. Audit details include entered quantity, chosen unit and converted base quantity.
 
 ## Purchase prices
-Product selection suggests weighted stock cost per chosen unit. Switching between base unit and pack converts the entered cost, rounded to six decimal places, so an edited supplier cost is preserved. Line total is quantity times selected-unit cost; the order total sums its lines. Zero stock value produces a zero suggestion: enter the supplier's quoted cost. Receiving still posts actual goods and cost separately.
+Product selection suggests weighted stock cost per chosen unit. Switching between base unit and pack converts the entered cost, rounded to six decimal places, so an edited supplier cost is preserved. Line total is quantity times selected-unit cost; the order total sums its lines. After sell-out, version 0.4.0 retains the latest recorded receipt/opening cost; with no cost history, enter the supplier quote. Receiving still posts actual goods and cost separately. Version 0.4.0 accepts packs or base units using the saved order conversion; actual cost is per selected receiving unit. See [workflow integrity](WORKFLOW-INTEGRITY.md).
 
 ## Owner account management
 Users → Edit changes username, role, active status and optionally password (12–200 characters). Leave the password blank to retain it. Remove access disables sign-in and revokes active tokens; it never deletes the user row or transaction history. Edit can reactivate an account. Your current owner account cannot be removed or demoted. Changing your own credentials requires signing in again.

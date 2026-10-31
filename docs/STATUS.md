@@ -6,7 +6,7 @@ Authentication/authorization, product catalogue, stock ledger and reconciliation
 
 The frontend talks to the actual Flask API. Empty screens do not insert fabricated business metrics. Demonstration catalogue data is optional and starts with zero stock.
 
-## Latest verification: 0.3.2
+## Earlier verification: 0.3.2
 
 Commit `2bcf0fc`: [integrity checks](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41061361562) passed 44 SQLite tests (3 PostgreSQL-only skipped), 47 PostgreSQL tests and 12 frontend tests plus production build. [Windows installer acceptance](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41061361459) passed. The supplied branding, persistent light/dark themes and all seven shop workflow refinements are included. User removal disables access while preserving history. See [SHOP-WORKFLOWS.md](SHOP-WORKFLOWS.md) for operator and API details.
 
@@ -67,6 +67,6 @@ DATUS 0.2.2 adds opt-in Tailscale Funnel configuration for a separate secured lo
 
 Version 0.3.0 adds a shared inventory with wholesale/retail allocations, four selling modes, purchase draft editing/confirmation and print/PDF, supplier editing, actual receipt costs, catalogue suggestions, receipt accountability, session history and M-Pesa reconciliation, and interactive dashboard charts/stock lists. See [AMENDMENTS.md](AMENDMENTS.md) for migration requirements and precise limits. Verified at commit `239496e`: integrity CI run [41023040299](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41023040299) passed 40 SQLite tests (3 locking tests skipped), 43 tests with PostgreSQL configured, 7 frontend tests and production build. Windows acceptance run [41023040277](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41023040277) passed. Migration preservation/refusal tests use disposable SQLite databases; PostgreSQL schema creation and allocation-vs-sale locking are also tested. Browser checks covered low-stock multi-selection into a draft, purchase print preview, separate checkout choices, session reconciliation and desktop/mobile layout.
 
-## 0.4.0 source changes
+## Latest verification: 0.4.0
 
-See [workflow integrity](WORKFLOW-INTEGRITY.md) for fixes, new money workflows, migration handling and regression cases. Verification is in progress; use the documented verified installer until the new build passes.
+See [workflow integrity](WORKFLOW-INTEGRITY.md) for fixes, new money workflows, migration handling and regression cases. Verified commit `251cf8b`: [integrity CI](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41144625395) passed 54 SQLite tests (6 PostgreSQL-only skipped), 60 PostgreSQL tests and 19 frontend tests plus production build. [Windows installer acceptance](https://github.com/immanuelcherui1/Datus_Shop_POS/actions/runs/41144625437) passed. Browser checks confirmed draft/receipt/payment/reversal relationships and mobile register/form layout.

@@ -62,3 +62,7 @@ Optional product expiry records the **earliest known on-hand expiry**, maintaine
 - Windows runtime grants only the additional supplier update / draft-line delete privileges needed by the new flows. Immutable transaction tables remain protected.
 
 Run the full SQLite and PostgreSQL suites, frontend tests/build, and frozen Windows acceptance before deployment. Test a copy of the shop backup and hardware on the destination computer before resuming live trade.
+
+## Subsequent 0.4.0 improvements
+
+[Workflow integrity](WORKFLOW-INTEGRITY.md) supersedes the receiving/cost/payment limitations above: receiving supports saved pack conversions, allocation works in both directions, costs survive sell-out, and new purchases track received-goods payments.

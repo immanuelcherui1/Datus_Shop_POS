@@ -107,3 +107,7 @@ All mutations retain the existing `Idempotency-Key`, authentication, CSRF and pe
 ## Shop workflow refinements (0.3.2)
 
 See [shop workflows](SHOP-WORKFLOWS.md) for full request semantics. Cart lines are unique by `(product_id, mode)` so pack and unit lines may share a product. Product requests accept `reorder_packs` (whole packaging units); stored `reorder_level` remains base units. Adjustments require the current session user's `password` and accept `unit: unit|pack`; `unit_cost` stays per base unit. Owner-only `PUT /users/{id}` accepts username, role, active and optional password; removal sets active=false, retains history and revokes tokens.
+
+## 0.4.0 workflow updates
+
+See [WORKFLOW-INTEGRITY.md](WORKFLOW-INTEGRITY.md) for receiving units, product conversion locks, bidirectional allocation and supplier/register payment APIs. These receiving rules supersede the base-unit-only description above.
